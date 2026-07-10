@@ -1086,13 +1086,23 @@
     function populateYears() {
       const currentFrom = els.yearFrom.value || '2017';
       const currentTo = els.yearTo.value || 'all';
-      const years = Array.from(new Set(availableVideos().map(video => video.year))).sort((a, b) => b - a);
+      const years = allSelectableYears().sort((a, b) => b - a);
       const ascending = [...years].sort((a, b) => a - b);
       const yearOptions = ascending.length ? ascending : [2017];
       els.yearFrom.innerHTML = yearOptions.map(year => `<option value="${year}">${year}年から</option>`).join('');
       els.yearTo.innerHTML = '<option value="all">最新まで</option>' + years.map(year => `<option value="${year}">${year}年まで</option>`).join('');
       els.yearFrom.value = [...els.yearFrom.options].some(option => option.value === currentFrom) ? currentFrom : String(yearOptions[0]);
       els.yearTo.value = [...els.yearTo.options].some(option => option.value === currentTo) ? currentTo : 'all';
+    }
+
+    function allSelectableYears() {
+      const latestDataYear = Math.max(2017, ...availableVideos().map(video => video.year));
+      const latestYear = Math.max(new Date().getFullYear(), latestDataYear);
+      const years = [];
+      for (let year = 2017; year <= latestYear; year += 1) {
+        years.push(year);
+      }
+      return years;
     }
 
     function populateGenres() {
@@ -1327,9 +1337,16 @@
     function scheduleAutoFetch(delay = 500) {
       window.clearTimeout(autoFetchTimer);
       if (!getApiKey()) return;
+      els.syncPill.textContent = allVideos.length ? '自動更新待ち' : '自動取得待ち';
       autoFetchTimer = window.setTimeout(() => {
         if (shouldAutoFetch()) fetchVideos();
       }, delay);
+    }
+
+    function ensureVideosAvailable(delay = 300) {
+      if (!allVideos.length) {
+        scheduleAutoFetch(delay);
+      }
     }
 
     function restoreCache() {
@@ -1340,7 +1357,9 @@
       }
       const cached = localStorage.getItem(CACHE_KEY);
       if (!cached) {
+        populateYears();
         populateGenres();
+        render();
         scheduleAutoFetch(500);
         return;
       }
@@ -1394,29 +1413,32 @@
     els.playerWatched.addEventListener('click', () => activeVideoId && toggleSet('watched', activeVideoId));
     els.query.addEventListener('input', () => {
       visibleLimit = PAGE_SIZE;
-      if (!allVideos.length) {
-        scheduleAutoFetch(300);
-      }
+      ensureVideosAvailable(250);
       render();
     });
     els.yearFrom.addEventListener('change', () => {
       visibleLimit = PAGE_SIZE;
+      ensureVideosAvailable(250);
       render();
     });
     els.yearTo.addEventListener('change', () => {
       visibleLimit = PAGE_SIZE;
+      ensureVideosAvailable(250);
       render();
     });
     els.genre.addEventListener('change', () => {
       visibleLimit = PAGE_SIZE;
+      ensureVideosAvailable(250);
       render();
     });
     els.sort.addEventListener('change', () => {
       visibleLimit = PAGE_SIZE;
+      ensureVideosAvailable(250);
       render();
     });
     els.libraryFilter.addEventListener('change', () => {
       visibleLimit = PAGE_SIZE;
+      ensureVideosAvailable(250);
       render();
     });
     els.loadMore.addEventListener('click', () => {
@@ -1434,6 +1456,7 @@
     });
 
     updatePlayerButtons();
+    populateYears();
     restoreCache();
   </script>
 </body>
