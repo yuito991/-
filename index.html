@@ -782,7 +782,7 @@
     const CHANNEL_ID = 'UCibEhpu5HP45-w7Bq1ZIulw';
     const MIN_DATE = new Date('2017-01-01T00:00:00Z');
     const STORAGE_KEY = 'fischers2017ViewerApiKey';
-    const CACHE_KEY = 'fischers2017ViewerCache';
+    const CACHE_KEY = 'fischers2017ViewerCacheV2';
     const STATE_KEY = 'fischers2017ViewerState';
     const PAGE_SIZE = 36;
     const AUTO_REFRESH_MS = 12 * 60 * 60 * 1000;
@@ -1328,10 +1328,16 @@
     function shouldAutoFetch() {
       if (!getApiKey() || loading) return false;
       if (!allVideos.length) return true;
+      if (newestAvailableYear() <= 2022) return true;
       if (!lastCacheSavedAt) return false;
       const savedTime = new Date(lastCacheSavedAt).getTime();
       if (!Number.isFinite(savedTime)) return false;
       return Date.now() - savedTime > AUTO_REFRESH_MS;
+    }
+
+    function newestAvailableYear() {
+      const years = availableVideos().map(video => video.year).filter(Boolean);
+      return years.length ? Math.max(...years) : 0;
     }
 
     function scheduleAutoFetch(delay = 500) {
