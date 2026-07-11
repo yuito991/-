@@ -7,16 +7,16 @@
   <style>
     :root {
       color-scheme: light;
-      --bg: #f6f7f4;
+      --bg: #f5f9ff;
       --panel: #ffffff;
-      --ink: #1c232a;
-      --muted: #65717d;
-      --line: #dce1dc;
-      --accent: #d92f2f;
-      --accent-2: #007c89;
-      --accent-3: #f2b84b;
-      --soft: #eef3ef;
-      --shadow: 0 12px 34px rgba(20, 28, 34, .10);
+      --ink: #142033;
+      --muted: #5f6f86;
+      --line: #d8e6f7;
+      --accent: #2563eb;
+      --accent-2: #0ea5e9;
+      --accent-3: #38bdf8;
+      --soft: #eef6ff;
+      --shadow: 0 12px 34px rgba(20, 55, 98, .10);
       --radius: 8px;
     }
 
@@ -26,7 +26,7 @@
       margin: 0;
       min-height: 100vh;
       background:
-        linear-gradient(180deg, rgba(217, 47, 47, .10), transparent 340px),
+        linear-gradient(180deg, rgba(37, 99, 235, .13), transparent 340px),
         var(--bg);
       color: var(--ink);
       font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
@@ -73,7 +73,7 @@
       display: grid;
       place-items: center;
       color: #fff;
-      background: linear-gradient(135deg, var(--accent), #182028);
+      background: linear-gradient(135deg, var(--accent), #0f274f);
       box-shadow: var(--shadow);
       flex: 0 0 auto;
     }
@@ -184,7 +184,7 @@
     .input:focus,
     .select:focus {
       border-color: var(--accent-2);
-      box-shadow: 0 0 0 3px rgba(0, 124, 137, .16);
+      box-shadow: 0 0 0 3px rgba(14, 165, 233, .16);
     }
 
     .button {
@@ -405,14 +405,14 @@
       border-radius: var(--radius);
       border: 1px solid var(--line);
       background: var(--panel);
-      box-shadow: 0 8px 24px rgba(24, 33, 40, .07);
+      box-shadow: 0 8px 24px rgba(20, 55, 98, .07);
       display: grid;
       grid-template-rows: auto 1fr;
       position: relative;
     }
 
     .card.active {
-      outline: 3px solid rgba(217, 47, 47, .22);
+      outline: 3px solid rgba(37, 99, 235, .22);
     }
 
     .thumb-btn {
@@ -445,7 +445,7 @@
       display: grid;
       place-items: center;
       border-radius: 50%;
-      background: rgba(217, 47, 47, .95);
+      background: rgba(37, 99, 235, .95);
       color: #fff;
       box-shadow: 0 7px 18px rgba(0, 0, 0, .22);
     }
@@ -462,7 +462,7 @@
       top: 8px;
       left: 8px;
       border-radius: 999px;
-      background: rgba(28, 35, 42, .85);
+      background: rgba(20, 32, 51, .85);
       color: #fff;
       padding: 4px 8px;
       font-size: .76rem;
@@ -539,8 +539,8 @@
     }
 
     .icon-button.active {
-      background: #fff0ef;
-      border-color: #e9aaa2;
+      background: #eff6ff;
+      border-color: #a7c7ff;
       color: var(--accent);
     }
 
@@ -782,7 +782,7 @@
     const CHANNEL_ID = 'UCibEhpu5HP45-w7Bq1ZIulw';
     const MIN_DATE = new Date('2017-01-01T00:00:00Z');
     const STORAGE_KEY = 'fischers2017ViewerApiKey';
-    const CACHE_KEY = 'fischers2017ViewerCacheV2';
+    const CACHE_KEY = 'fischers2017ViewerCacheV3';
     const STATE_KEY = 'fischers2017ViewerState';
     const PAGE_SIZE = 36;
     const AUTO_REFRESH_MS = 12 * 60 * 60 * 1000;
@@ -1005,7 +1005,12 @@
         visibleLimit = PAGE_SIZE;
         populateYears();
         populateGenres();
-        render();
+        if (activeVideoId) {
+          updatePlayerButtons();
+          renderRail();
+        } else {
+          render();
+        }
         els.setup.classList.add('hidden');
       } catch (error) {
         showError(`取得に失敗しました: ${error.message}`);
@@ -1085,10 +1090,14 @@
 
     function populateYears() {
       const currentFrom = els.yearFrom.value || '2017';
-      const currentTo = els.yearTo.value || 'all';
       const years = allSelectableYears().sort((a, b) => b - a);
       const ascending = [...years].sort((a, b) => a - b);
       const yearOptions = ascending.length ? ascending : [2017];
+      const latestYear = Math.max(...yearOptions);
+      const previousTo = els.yearTo.value || 'all';
+      const currentTo = previousTo !== 'all' && Number(previousTo) <= 2022 && latestYear > Number(previousTo)
+        ? 'all'
+        : previousTo;
       els.yearFrom.innerHTML = yearOptions.map(year => `<option value="${year}">${year}年から</option>`).join('');
       els.yearTo.innerHTML = '<option value="all">最新まで</option>' + years.map(year => `<option value="${year}">${year}年まで</option>`).join('');
       els.yearFrom.value = [...els.yearFrom.options].some(option => option.value === currentFrom) ? currentFrom : String(yearOptions[0]);
@@ -1292,7 +1301,8 @@
       els.playerYoutubeLink.href = `https://www.youtube.com/watch?v=${videoId}`;
       els.watchArea.classList.remove('hidden');
       els.nowPill.textContent = `再生中: ${video.genreLabel}`;
-      render();
+      updatePlayerButtons();
+      renderRail();
       els.watchArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
@@ -1327,6 +1337,7 @@
 
     function shouldAutoFetch() {
       if (!getApiKey() || loading) return false;
+      if (activeVideoId) return false;
       if (!allVideos.length) return true;
       if (newestAvailableYear() <= 2022) return true;
       if (!lastCacheSavedAt) return false;
