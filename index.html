@@ -759,7 +759,7 @@
             <button class="icon-button" id="closePlayer" type="button" title="閉じる" aria-label="閉じる"></button>
           </div>
         </div>
-        <iframe class="player-frame" id="playerFrame" title="YouTube player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+        <iframe class="player-frame" id="playerFrame" title="YouTube player" loading="eager" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen webkitallowfullscreen></iframe>
       </div>
       <aside class="rail" aria-label="ほかの動画">
         <div class="rail-head">
@@ -1167,7 +1167,8 @@
     }
 
     function availableVideos() {
-      return allVideos.filter(video => !video.isShort);
+      // Shorts are included so recent uploads are not hidden by duration or title heuristics.
+      return allVideos;
     }
 
     function seededRank(value) {
@@ -1291,19 +1292,23 @@
     function play(videoId) {
       const video = allVideos.find(item => item.id === videoId);
       if (!video) return;
+      if (activeVideoId === videoId) return;
+      const wasPlaying = Boolean(activeVideoId);
       activeVideoId = videoId;
       state.lastPlayed = videoId;
       state.watched.add(videoId);
       saveState();
       els.playerTitle.textContent = video.title;
       els.playerMeta.innerHTML = `<span>${formatDate(video.publishedAt)}</span><span class="tag">${escapeHtml(video.genreLabel)}</span>`;
-      els.playerFrame.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`;
+      els.playerFrame.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&enablejsapi=1&rel=0`;
       els.playerYoutubeLink.href = `https://www.youtube.com/watch?v=${videoId}`;
       els.watchArea.classList.remove('hidden');
       els.nowPill.textContent = `再生中: ${video.genreLabel}`;
       updatePlayerButtons();
       renderRail();
-      els.watchArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (!wasPlaying) {
+        requestAnimationFrame(() => els.watchArea.scrollIntoView({ behavior: 'auto', block: 'start' }));
+      }
     }
 
     function closePlayer() {
