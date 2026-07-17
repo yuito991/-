@@ -950,11 +950,16 @@
       }
 
       setLoading(true);
+      const hasCache = allVideos.length > 0;
+      const cachedIds = new Set(allVideos.map(video => video.id));
+      const cachedVideos = allVideos;
+      els.syncPill.textContent = hasCache ? '新着のみ更新中' : '初回取得中';
       showError('');
       try {
         const uploadsPlaylist = await resolveUploadsPlaylist(apiKey);
         let pageToken = '';
         let reachedBefore2017 = false;
+        let reachedCachedVideo = false;
         const videos = [];
 
         while (!reachedBefore2017) {
@@ -976,6 +981,10 @@
             }
             const videoId = item.contentDetails?.videoId || item.snippet?.resourceId?.videoId;
             if (!videoId) continue;
+            if (hasCache && cachedIds.has(videoId)) {
+              reachedCachedVideo = true;
+              continue;
+            }
             videos.push(normalizeVideo({
               id: videoId,
               title: item.snippet?.title || '無題',
@@ -992,11 +1001,12 @@
           }
 
           pageToken = data.nextPageToken || '';
-          if (!pageToken) break;
+          if (!pageToken || (hasCache && reachedCachedVideo)) break;
         }
 
         const enrichedVideos = await enrichVideoDetails(apiKey, dedupe(videos));
-        allVideos = enrichedVideos.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+        allVideos = dedupe([...enrichedVideos, ...cachedVideos])
+          .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
         lastCacheSavedAt = new Date().toISOString();
         localStorage.setItem(CACHE_KEY, JSON.stringify({
           savedAt: lastCacheSavedAt,
@@ -1034,21 +1044,26 @@
 
     async function enrichVideoDetails(apiKey, videos) {
       const enriched = videos.map(normalizeVideo);
+      const batches = [];
       for (let index = 0; index < enriched.length; index += 50) {
-        const batch = enriched.slice(index, index + 50);
-        const data = await apiGet('videos', {
-          part: 'contentDetails',
-          id: batch.map(video => video.id).join(','),
-          maxResults: 50,
-          key: apiKey
-        });
-        const details = new Map((data.items || []).map(item => [item.id, item.contentDetails]));
-        batch.forEach(video => {
-          const contentDetails = details.get(video.id);
-          if (!contentDetails?.duration) return;
-          video.durationSeconds = parseDurationSeconds(contentDetails.duration);
-          video.isShort = inferShort(video, video.durationSeconds);
-        });
+        batches.push(enriched.slice(index, index + 50));
+      }
+      for (let index = 0; index < batches.length; index += 4) {
+        await Promise.all(batches.slice(index, index + 4).map(async batch => {
+          const data = await apiGet('videos', {
+            part: 'contentDetails',
+            id: batch.map(video => video.id).join(','),
+            maxResults: 50,
+            key: apiKey
+          });
+          const details = new Map((data.items || []).map(item => [item.id, item.contentDetails]));
+          batch.forEach(video => {
+            const contentDetails = details.get(video.id);
+            if (!contentDetails?.duration) return;
+            video.durationSeconds = parseDurationSeconds(contentDetails.duration);
+            video.isShort = inferShort(video, video.durationSeconds);
+          });
+        }));
       }
       return enriched;
     }
@@ -1395,7 +1410,6 @@
         allVideos = data.videos
           .filter(video => new Date(video.publishedAt) >= MIN_DATE)
           .map(normalizeVideo);
-        const cacheNeedsDuration = allVideos.some(video => !video.durationSeconds);
         populateYears();
         populateGenres();
         render();
@@ -1405,7 +1419,7 @@
         if (state.lastPlayed && allVideos.some(video => video.id === state.lastPlayed)) {
           activeVideoId = state.lastPlayed;
         }
-        scheduleAutoFetch(cacheNeedsDuration ? 500 : 900);
+        scheduleAutoFetch(900);
       } catch {
         localStorage.removeItem(CACHE_KEY);
         scheduleAutoFetch(500);
