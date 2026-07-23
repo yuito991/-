@@ -786,7 +786,6 @@
     const STATE_KEY = 'fischers2017ViewerState';
     const PAGE_SIZE = 36;
     const AUTO_REFRESH_MS = 12 * 60 * 60 * 1000;
-    const SHORT_MAX_SECONDS = 75;
 
     const GENRES = [
       { id: 'challenge', label: 'チャレンジ', words: ['チャレンジ', '挑戦', '対決', '勝負', '耐久', '本気', '最強', '企画'] },
@@ -853,6 +852,15 @@
     let autoFetchTimer = 0;
     let lastCacheSavedAt = '';
     let state = loadState();
+    let youtubePlayer = null;
+    let youtubeApiReady = false;
+    let pendingPlayerVideoId = '';
+    let randomPlaybackEnabled = false;
+
+    window.onYouTubeIframeAPIReady = () => {
+      youtubeApiReady = true;
+      if (activeVideoId) loadVideoIntoPlayer(activeVideoId);
+    };
 
     function loadState() {
       try {
@@ -1038,7 +1046,7 @@
         genreId: video.genreId || genre.id,
         genreLabel: video.genreLabel || genre.label,
         durationSeconds,
-        isShort: inferShort(video, durationSeconds)
+        isShort: inferShort(video)
       };
     }
 
@@ -1061,7 +1069,7 @@
             const contentDetails = details.get(video.id);
             if (!contentDetails?.duration) return;
             video.durationSeconds = parseDurationSeconds(contentDetails.duration);
-            video.isShort = inferShort(video, video.durationSeconds);
+            video.isShort = inferShort(video);
           });
         }));
       }
@@ -1075,10 +1083,9 @@
       return days * 86400 + hours * 3600 + minutes * 60 + seconds;
     }
 
-    function inferShort(video, durationSeconds = 0) {
+    function inferShort(video) {
       const text = `${video.title || ''}\n${video.description || ''}`.toLowerCase();
-      const hasShortsLabel = /#shorts?\b|youtube shorts?|ショート|short動画|短尺/.test(text);
-      return hasShortsLabel || (durationSeconds > 0 && durationSeconds <= SHORT_MAX_SECONDS);
+      return /#(?:shorts?|ショート(?:動画)?)(?![A-Za-z0-9_ぁ-んァ-ン一-龯])/i.test(text);
     }
 
     function inferGenre(video) {
@@ -1182,8 +1189,7 @@
     }
 
     function availableVideos() {
-      // Shorts are included so recent uploads are not hidden by duration or title heuristics.
-      return allVideos;
+      return allVideos.filter(video => !video.isShort);
     }
 
     function seededRank(value) {
@@ -1295,19 +1301,60 @@
     }
 
     function randomVideo() {
-      const pool = filteredVideos();
-      const source = pool.length ? pool : availableVideos();
+      randomPlaybackEnabled = true;
+      const currentId = activeVideoId;
+      const pool = filteredVideos().filter(video => video.id !== currentId);
+      const source = pool.length
+        ? pool
+        : availableVideos().filter(video => video.id !== currentId);
       if (!source.length) {
+        randomPlaybackEnabled = false;
         showError('動画を取得してからランダム再生できます。');
         return;
       }
-      play(source[randomIndex(source.length)].id);
+      play(source[randomIndex(source.length)].id, true);
     }
 
-    function play(videoId) {
+    function loadVideoIntoPlayer(videoId) {
+      pendingPlayerVideoId = videoId;
+      if (youtubePlayer?.loadVideoById) {
+        youtubePlayer.loadVideoById(videoId);
+        return;
+      }
+      if (!youtubeApiReady || !window.YT?.Player) {
+        els.playerFrame.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&enablejsapi=1&rel=0`;
+        return;
+      }
+      const initialVideoId = videoId;
+      youtubePlayer = new window.YT.Player('playerFrame', {
+        videoId: initialVideoId,
+        playerVars: { autoplay: 1, playsinline: 1, enablejsapi: 1, rel: 0 },
+        events: {
+          onReady: event => {
+            if (pendingPlayerVideoId && pendingPlayerVideoId !== initialVideoId) {
+              event.target.loadVideoById(pendingPlayerVideoId);
+            } else {
+              event.target.playVideo();
+            }
+            pendingPlayerVideoId = '';
+          },
+          onStateChange: handleYoutubeStateChange
+        }
+      });
+    }
+
+    function handleYoutubeStateChange(event) {
+      if (event.data !== 0 || !randomPlaybackEnabled || !activeVideoId) return;
+      window.setTimeout(() => {
+        if (randomPlaybackEnabled && activeVideoId) randomVideo();
+      }, 250);
+    }
+
+    function play(videoId, keepRandomPlayback = false) {
       const video = allVideos.find(item => item.id === videoId);
       if (!video) return;
       if (activeVideoId === videoId) return;
+      if (!keepRandomPlayback) randomPlaybackEnabled = false;
       const wasPlaying = Boolean(activeVideoId);
       activeVideoId = videoId;
       state.lastPlayed = videoId;
@@ -1315,7 +1362,7 @@
       saveState();
       els.playerTitle.textContent = video.title;
       els.playerMeta.innerHTML = `<span>${formatDate(video.publishedAt)}</span><span class="tag">${escapeHtml(video.genreLabel)}</span>`;
-      els.playerFrame.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&enablejsapi=1&rel=0`;
+      loadVideoIntoPlayer(videoId);
       els.playerYoutubeLink.href = `https://www.youtube.com/watch?v=${videoId}`;
       els.watchArea.classList.remove('hidden');
       els.nowPill.textContent = `再生中: ${video.genreLabel}`;
@@ -1327,7 +1374,10 @@
     }
 
     function closePlayer() {
-      els.playerFrame.src = '';
+      randomPlaybackEnabled = false;
+      pendingPlayerVideoId = '';
+      if (youtubePlayer?.stopVideo) youtubePlayer.stopVideo();
+      else els.playerFrame.src = '';
       els.watchArea.classList.add('hidden');
       activeVideoId = '';
       els.nowPill.textContent = '未再生';
@@ -1495,5 +1545,6 @@
     populateYears();
     restoreCache();
   </script>
+  <script src="https://www.youtube.com/iframe_api"></script>
 </body>
 </html>
