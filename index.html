@@ -852,15 +852,20 @@
     let autoFetchTimer = 0;
     let lastCacheSavedAt = '';
     let state = loadState();
-    let youtubePlayer = null;
-    let youtubeApiReady = false;
-    let pendingPlayerVideoId = '';
     let randomPlaybackEnabled = false;
 
-    window.onYouTubeIframeAPIReady = () => {
-      youtubeApiReady = true;
-      if (activeVideoId) loadVideoIntoPlayer(activeVideoId);
-    };
+    window.addEventListener('message', event => {
+      if (event.origin !== 'https://www.youtube.com' || event.source !== els.playerFrame.contentWindow) return;
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        const playerState = data?.event === 'onStateChange'
+          ? Number(data.info)
+          : Number(data?.info?.playerState);
+        if (playerState === 0) handleYoutubeStateChange();
+      } catch {
+        // Ignore unrelated YouTube player messages.
+      }
+    });
 
     function loadState() {
       try {
@@ -1316,35 +1321,22 @@
     }
 
     function loadVideoIntoPlayer(videoId) {
-      pendingPlayerVideoId = videoId;
-      if (youtubePlayer?.loadVideoById) {
-        youtubePlayer.loadVideoById(videoId);
-        return;
-      }
-      if (!youtubeApiReady || !window.YT?.Player) {
-        els.playerFrame.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&enablejsapi=1&rel=0`;
-        return;
-      }
-      const initialVideoId = videoId;
-      youtubePlayer = new window.YT.Player('playerFrame', {
-        videoId: initialVideoId,
-        playerVars: { autoplay: 1, playsinline: 1, enablejsapi: 1, rel: 0 },
-        events: {
-          onReady: event => {
-            if (pendingPlayerVideoId && pendingPlayerVideoId !== initialVideoId) {
-              event.target.loadVideoById(pendingPlayerVideoId);
-            } else {
-              event.target.playVideo();
-            }
-            pendingPlayerVideoId = '';
-          },
-          onStateChange: handleYoutubeStateChange
-        }
-      });
+      const origin = /^https?:$/.test(window.location.protocol)
+        ? `&origin=${encodeURIComponent(window.location.origin)}`
+        : '';
+      els.playerFrame.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&enablejsapi=1&rel=0${origin}`;
     }
 
-    function handleYoutubeStateChange(event) {
-      if (event.data !== 0 || !randomPlaybackEnabled || !activeVideoId) return;
+    function subscribeToPlayerEvents() {
+      const target = els.playerFrame.contentWindow;
+      if (!target) return;
+      const base = { id: 'playerFrame', channel: 'widget' };
+      target.postMessage(JSON.stringify({ ...base, event: 'listening' }), 'https://www.youtube.com');
+      target.postMessage(JSON.stringify({ ...base, event: 'command', func: 'addEventListener', args: ['onStateChange'] }), 'https://www.youtube.com');
+    }
+
+    function handleYoutubeStateChange() {
+      if (!randomPlaybackEnabled || !activeVideoId) return;
       window.setTimeout(() => {
         if (randomPlaybackEnabled && activeVideoId) randomVideo();
       }, 250);
@@ -1375,9 +1367,7 @@
 
     function closePlayer() {
       randomPlaybackEnabled = false;
-      pendingPlayerVideoId = '';
-      if (youtubePlayer?.stopVideo) youtubePlayer.stopVideo();
-      else els.playerFrame.src = '';
+      els.playerFrame.src = '';
       els.watchArea.classList.add('hidden');
       activeVideoId = '';
       els.nowPill.textContent = '未再生';
@@ -1533,6 +1523,7 @@
     });
     els.grid.addEventListener('click', handleVideoAction);
     els.rail.addEventListener('click', handleVideoAction);
+    els.playerFrame.addEventListener('load', subscribeToPlayerEvents);
     els.closePlayer.addEventListener('click', closePlayer);
     els.apiKey.addEventListener('keydown', event => {
       if (event.key === 'Enter' && !loading) {
@@ -1545,6 +1536,5 @@
     populateYears();
     restoreCache();
   </script>
-  <script src="https://www.youtube.com/iframe_api"></script>
 </body>
 </html>
