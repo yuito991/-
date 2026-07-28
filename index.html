@@ -6,7 +6,7 @@
   <title>Fischer's 2017+ Viewer</title>
   <style>
     :root {
-      color-scheme: light;
+      color-scheme: light dark;
       --bg: #f5f9ff;
       --panel: #ffffff;
       --ink: #142033;
@@ -110,6 +110,39 @@
       justify-content: flex-end;
     }
 
+    .header-tools {
+      display: grid;
+      gap: 10px;
+      justify-items: end;
+    }
+
+    .random-play {
+      min-width: 224px;
+      min-height: 58px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, .26);
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #fff;
+      padding: 0 22px;
+      font-size: 1.08rem;
+      font-weight: 900;
+      box-shadow: 0 12px 26px rgba(37, 99, 235, .28);
+    }
+
+    .random-play svg {
+      width: 24px;
+      height: 24px;
+      stroke: currentColor;
+      stroke-width: 2.2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
     .pill {
       min-height: 34px;
       display: inline-flex;
@@ -203,7 +236,7 @@
     }
 
     .button.secondary {
-      background: #fff;
+      background: var(--panel);
       color: var(--ink);
       border: 1px solid var(--line);
     }
@@ -233,7 +266,7 @@
       top: 0;
       z-index: 10;
       display: grid;
-      grid-template-columns: minmax(190px, 1.2fr) repeat(5, minmax(112px, .5fr)) auto auto;
+      grid-template-columns: minmax(190px, 1.2fr) repeat(5, minmax(112px, .5fr)) auto;
       gap: 9px;
       align-items: center;
       padding: 12px;
@@ -509,7 +542,7 @@
 
     .description {
       margin: 0;
-      color: #52606c;
+      color: var(--muted);
       line-height: 1.5;
       font-size: .91rem;
       display: -webkit-box;
@@ -533,14 +566,14 @@
       place-items: center;
       border-radius: 8px;
       border: 1px solid var(--line);
-      background: #fff;
+      background: var(--panel);
       color: var(--ink);
       text-decoration: none;
     }
 
     .icon-button.active {
-      background: #eff6ff;
-      border-color: #a7c7ff;
+      background: var(--soft);
+      border-color: var(--accent-2);
       color: var(--accent);
     }
 
@@ -594,9 +627,56 @@
       to { transform: rotate(360deg); }
     }
 
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0a1220;
+        --panel: #111d2e;
+        --ink: #e6eefb;
+        --muted: #aab9cf;
+        --line: #273b58;
+        --accent: #38bdf8;
+        --accent-2: #2563eb;
+        --accent-3: #7dd3fc;
+        --soft: #182b45;
+        --shadow: 0 12px 34px rgba(0, 0, 0, .32);
+      }
+
+      body {
+        background: linear-gradient(180deg, rgba(56, 189, 248, .10), transparent 340px), var(--bg);
+      }
+
+      .pill,
+      .setup,
+      .toolbar,
+      .watch-area,
+      .empty,
+      .error-box {
+        background: rgba(17, 29, 46, .94);
+      }
+
+      .input,
+      .select,
+      .rail {
+        background: #0d1828;
+      }
+
+      .tag {
+        color: var(--ink);
+      }
+
+      .thumb-btn,
+      .card .thumb-btn {
+        background: #17263b;
+      }
+
+      .random-play {
+        box-shadow: 0 12px 26px rgba(0, 0, 0, .34);
+      }
+    }
+
     @media (max-width: 1060px) {
       .toolbar {
-        grid-template-columns: minmax(210px, 1fr) repeat(4, minmax(112px, 1fr)) auto auto;
+        grid-template-columns: minmax(210px, 1fr) repeat(4, minmax(112px, 1fr)) auto;
       }
 
       .toolbar .library-control {
@@ -619,6 +699,14 @@
 
       .status-strip {
         justify-content: flex-start;
+      }
+
+      .header-tools {
+        justify-items: stretch;
+      }
+
+      .random-play {
+        width: 100%;
       }
 
       .key-row {
@@ -680,11 +768,17 @@
           </p>
         </div>
       </div>
-      <div class="status-strip" aria-live="polite">
-        <span class="pill" id="countPill">0件</span>
-        <span class="pill" id="rangePill">2017年以降</span>
-        <span class="pill" id="syncPill">未取得</span>
-        <span class="pill" id="nowPill">未再生</span>
+      <div class="header-tools">
+        <button class="random-play" id="randomPlay" type="button">
+          <svg viewBox="0 0 24 24"><path d="m18 14 4 4-4 4"></path><path d="m18 2 4 4-4 4"></path><path d="M2 18h1.9a6 6 0 0 0 5.2-3l5.8-10A6 6 0 0 1 20.1 2H22"></path><path d="M2 6h1.9a6 6 0 0 1 5.2 3l.8 1.4"></path><path d="M14 18h8"></path></svg>
+          ランダム再生
+        </button>
+        <div class="status-strip" aria-live="polite">
+          <span class="pill" id="countPill">0件</span>
+          <span class="pill" id="rangePill">2017年以降</span>
+          <span class="pill" id="syncPill">未取得</span>
+          <span class="pill" id="nowPill">未再生</span>
+        </div>
       </div>
     </header>
 
@@ -732,10 +826,6 @@
         <option value="favorite">お気に入り</option>
         <option value="later">あとで見る</option>
       </select>
-      <button class="button accent" id="randomPlay" type="button">
-        <svg viewBox="0 0 24 24"><path d="m18 14 4 4-4 4"></path><path d="m18 2 4 4-4 4"></path><path d="M2 18h1.9a6 6 0 0 0 5.2-3l5.8-10A6 6 0 0 1 20.1 2H22"></path><path d="M2 6h1.9a6 6 0 0 1 5.2 3l.8 1.4"></path><path d="M14 18h8"></path></svg>
-        ランダム
-      </button>
       <button class="button" id="refresh" type="button">
         <span class="spinner" aria-hidden="true"></span>
         <svg class="refresh-icon" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"></path><path d="M3 21v-5h5"></path><path d="M3 12A9 9 0 0 1 18.5 5.8L21 8"></path><path d="M21 3v5h-5"></path></svg>
