@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Fischer's 2017+ Viewer</title>
+  <title>Fischer's 2016+ Viewer</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -91,25 +91,6 @@
       letter-spacing: 0;
     }
 
-    .subtitle {
-      margin: 7px 0 0;
-      color: var(--muted);
-      line-height: 1.55;
-    }
-
-    .channel-link {
-      color: var(--accent);
-      text-decoration: none;
-      font-weight: 800;
-    }
-
-    .status-strip {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      justify-content: flex-end;
-    }
-
     .header-tools {
       display: grid;
       gap: 10px;
@@ -141,20 +122,6 @@
       fill: none;
       stroke-linecap: round;
       stroke-linejoin: round;
-    }
-
-    .pill {
-      min-height: 34px;
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      border: 1px solid var(--line);
-      background: rgba(255, 255, 255, .76);
-      border-radius: 999px;
-      padding: 6px 11px;
-      color: var(--muted);
-      font-size: .9rem;
-      white-space: nowrap;
     }
 
     .setup,
@@ -266,7 +233,7 @@
       top: 0;
       z-index: 10;
       display: grid;
-      grid-template-columns: minmax(190px, 1.2fr) repeat(5, minmax(112px, .5fr)) auto;
+      grid-template-columns: minmax(190px, 1.2fr) repeat(4, minmax(112px, .5fr)) auto;
       gap: 9px;
       align-items: center;
       padding: 12px;
@@ -645,7 +612,6 @@
         background: linear-gradient(180deg, rgba(56, 189, 248, .10), transparent 340px), var(--bg);
       }
 
-      .pill,
       .setup,
       .toolbar,
       .watch-area,
@@ -695,10 +661,6 @@
       .toolbar {
         grid-template-columns: 1fr;
         align-items: stretch;
-      }
-
-      .status-strip {
-        justify-content: flex-start;
       }
 
       .header-tools {
@@ -761,11 +723,7 @@
           <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg>
         </div>
         <div>
-          <h1>Fischer's 2017+ Viewer</h1>
-          <p class="subtitle">
-            <a class="channel-link" href="https://www.youtube.com/channel/UCibEhpu5HP45-w7Bq1ZIulw" target="_blank" rel="noreferrer">Fischer's-フィッシャーズ-</a>
-            の2017年1月1日以降の動画だけを、スマホでも見やすく並べます。
-          </p>
+          <h1>Fischer's 2016+ Viewer</h1>
         </div>
       </div>
       <div class="header-tools">
@@ -773,12 +731,6 @@
           <svg viewBox="0 0 24 24"><path d="m18 14 4 4-4 4"></path><path d="m18 2 4 4-4 4"></path><path d="M2 18h1.9a6 6 0 0 0 5.2-3l5.8-10A6 6 0 0 1 20.1 2H22"></path><path d="M2 6h1.9a6 6 0 0 1 5.2 3l.8 1.4"></path><path d="M14 18h8"></path></svg>
           ランダム再生
         </button>
-        <div class="status-strip" aria-live="polite">
-          <span class="pill" id="countPill">0件</span>
-          <span class="pill" id="rangePill">2017年以降</span>
-          <span class="pill" id="syncPill">未取得</span>
-          <span class="pill" id="nowPill">未再生</span>
-        </div>
       </div>
     </header>
 
@@ -803,19 +755,15 @@
         <input class="input" id="query" type="search" placeholder="タイトル・説明で検索">
       </label>
       <select class="select" id="yearFrom" aria-label="開始年">
-        <option value="2017">2017年から</option>
+        <option value="2016">2016年から</option>
       </select>
       <select class="select" id="yearTo" aria-label="終了年">
         <option value="all">最新まで</option>
-      </select>
-      <select class="select" id="genre">
-        <option value="all">全ジャンル</option>
       </select>
       <select class="select" id="sort">
         <option value="new">新しい順</option>
         <option value="old">古い順</option>
         <option value="title">タイトル順</option>
-        <option value="genre">ジャンル順</option>
         <option value="unwatched">未視聴優先</option>
         <option value="random">ランダム順</option>
       </select>
@@ -854,7 +802,6 @@
       <aside class="rail" aria-label="ほかの動画">
         <div class="rail-head">
           <h2 class="rail-title">次に見る候補</h2>
-          <span class="tag" id="railGenre">全ジャンル</span>
         </div>
         <div class="rail-list" id="rail"></div>
       </aside>
@@ -869,26 +816,13 @@
   </main>
 
   <script>
-    const CHANNEL_ID = 'UCibEhpu5HP45-w7Bq1ZIulw';
-    const MIN_DATE = new Date('2017-01-01T00:00:00Z');
+    const UPLOADS_PLAYLIST_ID = 'UUibEhpu5HP45-w7Bq1ZIulw';
+    const MIN_DATE = new Date('2016-01-01T00:00:00Z');
     const STORAGE_KEY = 'fischers2017ViewerApiKey';
-    const CACHE_KEY = 'fischers2017ViewerCacheV3';
+    const CACHE_KEY = 'fischers2017ViewerCacheV5';
     const STATE_KEY = 'fischers2017ViewerState';
     const PAGE_SIZE = 36;
     const AUTO_REFRESH_MS = 12 * 60 * 60 * 1000;
-
-    const GENRES = [
-      { id: 'challenge', label: 'チャレンジ', words: ['チャレンジ', '挑戦', '対決', '勝負', '耐久', '本気', '最強', '企画'] },
-      { id: 'athletic', label: '運動・アスレチック', words: ['アスレチック', '鬼ごっこ', 'スポーツ', '運動', 'サッカー', '野球', 'バスケ', '水泳', 'ドッジ', 'SASUKE', 'シルク'] },
-      { id: 'food', label: '食べ物・大食い', words: ['大食い', '食べ', '料理', '飯', 'ご飯', 'ラーメン', '寿司', '肉', 'グミ', '駄菓子', 'コンビニ'] },
-      { id: 'prank', label: 'ドッキリ・検証', words: ['ドッキリ', '検証', '実験', 'やってみた', 'もしも', 'モニタリング', '嘘', 'サプライズ'] },
-      { id: 'game', label: 'ゲーム・遊び', words: ['ゲーム', 'マイクラ', 'スマブラ', 'カード', 'ボードゲーム', '遊び', 'くじ', 'ガチャ', 'ポケモン'] },
-      { id: 'travel', label: '旅行・外ロケ', words: ['旅行', '旅', '海外', '島', 'ホテル', 'キャンプ', 'ロケ', '公園', '温泉', '海', '山'] },
-      { id: 'collab', label: 'コラボ', words: ['コラボ', 'ゲスト', 'さんと', 'ンダホ', 'マサイ', 'モトキ', 'ザカオ', 'ぺけたん', 'ダーマ'] },
-      { id: 'music', label: '音楽・イベント', words: ['歌', '音楽', 'MV', 'ライブ', 'イベント', 'フェス', '踊', 'ダンス'] },
-      { id: 'shorts', label: '短編・お知らせ', words: ['shorts', 'ショート', '報告', 'お知らせ', '発表', '重大'] },
-      { id: 'other', label: 'その他', words: [] }
-    ];
 
     const els = {
       setup: document.getElementById('setup'),
@@ -899,16 +833,11 @@
       query: document.getElementById('query'),
       yearFrom: document.getElementById('yearFrom'),
       yearTo: document.getElementById('yearTo'),
-      genre: document.getElementById('genre'),
       sort: document.getElementById('sort'),
       libraryFilter: document.getElementById('libraryFilter'),
       grid: document.getElementById('grid'),
       empty: document.getElementById('empty'),
       errorBox: document.getElementById('errorBox'),
-      countPill: document.getElementById('countPill'),
-      rangePill: document.getElementById('rangePill'),
-      syncPill: document.getElementById('syncPill'),
-      nowPill: document.getElementById('nowPill'),
       watchArea: document.getElementById('watchArea'),
       playerTitle: document.getElementById('playerTitle'),
       playerMeta: document.getElementById('playerMeta'),
@@ -919,7 +848,6 @@
       playerWatched: document.getElementById('playerWatched'),
       playerRandom: document.getElementById('playerRandom'),
       closePlayer: document.getElementById('closePlayer'),
-      railGenre: document.getElementById('railGenre'),
       rail: document.getElementById('rail'),
       moreRow: document.getElementById('moreRow'),
       loadMore: document.getElementById('loadMore')
@@ -941,6 +869,7 @@
     let activeVideoId = '';
     let autoFetchTimer = 0;
     let lastCacheSavedAt = '';
+    let archiveComplete = false;
     let state = loadState();
     let randomPlaybackEnabled = false;
 
@@ -994,7 +923,6 @@
       els.saveKey.disabled = next;
       els.refresh.classList.toggle('loading', next);
       els.saveKey.classList.toggle('loading', next);
-      els.syncPill.textContent = next ? '取得中' : (allVideos.length ? '取得済み' : '未取得');
     }
 
     function showError(message) {
@@ -1031,19 +959,6 @@
       return data;
     }
 
-    async function resolveUploadsPlaylist(apiKey) {
-      const data = await apiGet('channels', {
-        part: 'contentDetails',
-        id: CHANNEL_ID,
-        key: apiKey
-      });
-      const playlistId = data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
-      if (!playlistId) {
-        throw new Error('チャンネルのアップロード一覧を取得できませんでした。');
-      }
-      return playlistId;
-    }
-
     async function fetchVideos() {
       const apiKey = getApiKey();
       if (!apiKey) {
@@ -1054,21 +969,21 @@
 
       setLoading(true);
       const hasCache = allVideos.length > 0;
+      const canStopAtCache = hasCache && archiveComplete;
       const cachedIds = new Set(allVideos.map(video => video.id));
       const cachedVideos = allVideos;
-      els.syncPill.textContent = hasCache ? '新着のみ更新中' : '初回取得中';
       showError('');
       try {
-        const uploadsPlaylist = await resolveUploadsPlaylist(apiKey);
         let pageToken = '';
-        let reachedBefore2017 = false;
+        let reachedBeforeMinDate = false;
         let reachedCachedVideo = false;
         const videos = [];
+        let firstPageReady = false;
 
-        while (!reachedBefore2017) {
+        while (!reachedBeforeMinDate) {
           const data = await apiGet('playlistItems', {
             part: 'snippet,contentDetails',
-            playlistId: uploadsPlaylist,
+            playlistId: UPLOADS_PLAYLIST_ID,
             maxResults: 50,
             pageToken,
             key: apiKey
@@ -1079,12 +994,12 @@
             if (!publishedAt) continue;
             const publishedDate = new Date(publishedAt);
             if (publishedDate < MIN_DATE) {
-              reachedBefore2017 = true;
+              reachedBeforeMinDate = true;
               continue;
             }
             const videoId = item.contentDetails?.videoId || item.snippet?.resourceId?.videoId;
             if (!videoId) continue;
-            if (hasCache && cachedIds.has(videoId)) {
+            if (canStopAtCache && cachedIds.has(videoId)) {
               reachedCachedVideo = true;
               continue;
             }
@@ -1103,29 +1018,37 @@
             }));
           }
 
+          allVideos = dedupe([...videos, ...cachedVideos])
+            .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+          lastCacheSavedAt = new Date().toISOString();
+          localStorage.setItem(CACHE_KEY, JSON.stringify({
+            savedAt: lastCacheSavedAt,
+            archiveComplete,
+            videos: allVideos
+          }));
+
+          if (!firstPageReady) {
+            firstPageReady = true;
+            visibleLimit = PAGE_SIZE;
+            populateYears();
+            render();
+            els.setup.classList.add('hidden');
+            if (!activeVideoId) randomVideo();
+          }
+
           pageToken = data.nextPageToken || '';
-          if (!pageToken || (hasCache && reachedCachedVideo)) break;
+          if (!pageToken || (canStopAtCache && reachedCachedVideo)) break;
         }
 
-        const enrichedVideos = await enrichVideoDetails(apiKey, dedupe(videos));
-        allVideos = dedupe([...enrichedVideos, ...cachedVideos])
-          .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
-        lastCacheSavedAt = new Date().toISOString();
+        archiveComplete = archiveComplete || reachedBeforeMinDate || !pageToken;
         localStorage.setItem(CACHE_KEY, JSON.stringify({
           savedAt: lastCacheSavedAt,
+          archiveComplete,
           videos: allVideos
         }));
-        visibleLimit = PAGE_SIZE;
         populateYears();
-        populateGenres();
-        if (activeVideoId) {
-          updatePlayerButtons();
-          renderRail();
-        } else {
-          render();
-          randomVideo();
-        }
-        els.setup.classList.add('hidden');
+        render();
+        if (!activeVideoId) randomVideo();
       } catch (error) {
         showError(`取得に失敗しました: ${error.message}`);
       } finally {
@@ -1134,49 +1057,11 @@
     }
 
     function normalizeVideo(video) {
-      const genre = inferGenre(video);
-      const durationSeconds = Number(video.durationSeconds || 0);
       return {
         ...video,
         year: video.year || new Date(video.publishedAt).getUTCFullYear(),
-        genreId: video.genreId || genre.id,
-        genreLabel: video.genreLabel || genre.label,
-        durationSeconds,
         isShort: inferShort(video)
       };
-    }
-
-    async function enrichVideoDetails(apiKey, videos) {
-      const enriched = videos.map(normalizeVideo);
-      const batches = [];
-      for (let index = 0; index < enriched.length; index += 50) {
-        batches.push(enriched.slice(index, index + 50));
-      }
-      for (let index = 0; index < batches.length; index += 4) {
-        await Promise.all(batches.slice(index, index + 4).map(async batch => {
-          const data = await apiGet('videos', {
-            part: 'contentDetails',
-            id: batch.map(video => video.id).join(','),
-            maxResults: 50,
-            key: apiKey
-          });
-          const details = new Map((data.items || []).map(item => [item.id, item.contentDetails]));
-          batch.forEach(video => {
-            const contentDetails = details.get(video.id);
-            if (!contentDetails?.duration) return;
-            video.durationSeconds = parseDurationSeconds(contentDetails.duration);
-            video.isShort = inferShort(video);
-          });
-        }));
-      }
-      return enriched;
-    }
-
-    function parseDurationSeconds(duration) {
-      const match = /^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(duration || '');
-      if (!match) return 0;
-      const [, days = 0, hours = 0, minutes = 0, seconds = 0] = match.map(value => Number(value || 0));
-      return days * 86400 + hours * 3600 + minutes * 60 + seconds;
     }
 
     function inferShort(video) {
@@ -1184,33 +1069,15 @@
       return /#(?:shorts?|ショート(?:動画)?)(?![A-Za-z0-9_ぁ-んァ-ン一-龯])/i.test(text);
     }
 
-    function inferGenre(video) {
-      const title = `${video.title || ''}`.toLowerCase();
-      const text = `${video.title || ''}\n${video.description || ''}`.toLowerCase();
-      for (const genre of GENRES) {
-        if (genre.id === 'other') continue;
-        if (genre.words.some(word => title.includes(word.toLowerCase()))) {
-          return { id: genre.id, label: genre.label };
-        }
-      }
-      for (const genre of GENRES) {
-        if (genre.id === 'other') continue;
-        if (genre.words.some(word => text.includes(word.toLowerCase()))) {
-          return { id: genre.id, label: genre.label };
-        }
-      }
-      return { id: 'other', label: 'その他' };
-    }
-
     function dedupe(videos) {
       return Array.from(new Map(videos.map(video => [video.id, video])).values());
     }
 
     function populateYears() {
-      const currentFrom = els.yearFrom.value || '2017';
+      const currentFrom = els.yearFrom.value || '2016';
       const years = allSelectableYears().sort((a, b) => b - a);
       const ascending = [...years].sort((a, b) => a - b);
-      const yearOptions = ascending.length ? ascending : [2017];
+      const yearOptions = ascending.length ? ascending : [2016];
       const latestYear = Math.max(...yearOptions);
       const previousTo = els.yearTo.value || 'all';
       const currentTo = previousTo !== 'all' && Number(previousTo) <= 2022 && latestYear > Number(previousTo)
@@ -1223,41 +1090,25 @@
     }
 
     function allSelectableYears() {
-      const latestDataYear = Math.max(2017, ...availableVideos().map(video => video.year));
+      const latestDataYear = Math.max(2016, ...availableVideos().map(video => video.year));
       const latestYear = Math.max(new Date().getFullYear(), latestDataYear);
       const years = [];
-      for (let year = 2017; year <= latestYear; year += 1) {
+      for (let year = 2016; year <= latestYear; year += 1) {
         years.push(year);
       }
       return years;
     }
 
-    function populateGenres() {
-      const current = els.genre.value;
-      const catalog = availableVideos();
-      const counts = new Map(catalog.map(video => [video.genreId, 0]));
-      catalog.forEach(video => counts.set(video.genreId, (counts.get(video.genreId) || 0) + 1));
-      els.genre.innerHTML = '<option value="all">全ジャンル</option>' + GENRES
-        .filter(genre => counts.has(genre.id))
-        .map(genre => `<option value="${genre.id}">${genre.label} (${counts.get(genre.id) || 0})</option>`)
-        .join('');
-      if ([...els.genre.options].some(option => option.value === current)) {
-        els.genre.value = current;
-      }
-    }
-
     function filteredVideos() {
       const query = els.query.value.trim().toLowerCase();
-      const selectedFrom = Number(els.yearFrom.value || 2017);
+      const selectedFrom = Number(els.yearFrom.value || 2016);
       const selectedTo = els.yearTo.value === 'all' ? Infinity : Number(els.yearTo.value);
       const yearFrom = Math.min(selectedFrom, selectedTo);
       const yearTo = Math.max(selectedFrom, selectedTo);
-      const genre = els.genre.value;
       const library = els.libraryFilter.value;
       const sort = els.sort.value;
       const videos = availableVideos().filter(video => {
         const yearMatch = video.year >= yearFrom && video.year <= yearTo;
-        const genreMatch = genre === 'all' || video.genreId === genre;
         const queryMatch = !query || `${video.title}\n${video.description}`.toLowerCase().includes(query);
         const libraryMatch =
           library === 'all'
@@ -1265,15 +1116,13 @@
           || (library === 'watched' && state.watched.has(video.id))
           || (library === 'favorite' && state.favorites.has(video.id))
           || (library === 'later' && state.later.has(video.id));
-        return yearMatch && genreMatch && queryMatch && libraryMatch;
+        return yearMatch && queryMatch && libraryMatch;
       });
 
       if (sort === 'old') {
         videos.sort((a, b) => new Date(a.publishedAt) - new Date(b.publishedAt));
       } else if (sort === 'title') {
         videos.sort((a, b) => a.title.localeCompare(b.title, 'ja'));
-      } else if (sort === 'genre') {
-        videos.sort((a, b) => a.genreLabel.localeCompare(b.genreLabel, 'ja') || new Date(b.publishedAt) - new Date(a.publishedAt));
       } else if (sort === 'unwatched') {
         videos.sort((a, b) => Number(state.watched.has(a.id)) - Number(state.watched.has(b.id)) || new Date(b.publishedAt) - new Date(a.publishedAt));
       } else if (sort === 'random') {
@@ -1299,8 +1148,6 @@
     function render() {
       const videos = filteredVideos();
       const rendered = videos.slice(0, visibleLimit);
-      els.countPill.textContent = `${videos.length.toLocaleString('ja-JP')}件`;
-      els.rangePill.textContent = selectedRangeLabel();
       els.empty.classList.toggle('hidden', rendered.length > 0);
       els.moreRow.classList.toggle('hidden', rendered.length >= videos.length);
 
@@ -1325,7 +1172,6 @@
             <h2 class="title">${escapeHtml(video.title)}</h2>
             <div class="meta">
               <span>${formatDate(video.publishedAt)}</span>
-              <span class="tag">${escapeHtml(video.genreLabel)}</span>
             </div>
             <p class="description">${escapeHtml(video.description || '説明文なし')}</p>
             <div class="card-actions">
@@ -1342,28 +1188,17 @@
 
     function renderRail() {
       if (!activeVideoId) return;
-      const active = allVideos.find(video => video.id === activeVideoId);
       const candidates = filteredVideos().filter(video => video.id !== activeVideoId);
-      const sameGenre = active ? candidates.filter(video => video.genreId === active.genreId) : [];
-      const otherVideos = active ? candidates.filter(video => video.genreId !== active.genreId) : candidates;
-      const videos = shuffleVideos([...sameGenre, ...otherVideos]).slice(0, 18);
-      els.railGenre.textContent = active ? `${active.genreLabel}からランダム` : 'ランダム';
+      const videos = shuffleVideos(candidates).slice(0, 18);
       els.rail.innerHTML = videos.map(video => `
         <button class="rail-item" type="button" data-action="play" data-id="${video.id}">
           <span class="rail-thumb"><img src="${escapeAttr(video.thumbnail)}" alt="" loading="lazy"></span>
           <span class="rail-info">
             <span class="rail-name">${escapeHtml(video.title)}</span>
-            <span class="rail-date">${formatDate(video.publishedAt)} ・ ${escapeHtml(video.genreLabel)}</span>
+            <span class="rail-date">${formatDate(video.publishedAt)}</span>
           </span>
         </button>
       `).join('');
-    }
-
-    function selectedRangeLabel() {
-      const from = Number(els.yearFrom.value || 2017);
-      const to = els.yearTo.value === 'all' ? Infinity : Number(els.yearTo.value);
-      if (to === Infinity) return `${from}年〜最新`;
-      return `${Math.min(from, to)}年〜${Math.max(from, to)}年`;
     }
 
     function shuffleVideos(videos) {
@@ -1444,11 +1279,10 @@
       state.watched.add(videoId);
       saveState();
       els.playerTitle.textContent = video.title;
-      els.playerMeta.innerHTML = `<span>${formatDate(video.publishedAt)}</span><span class="tag">${escapeHtml(video.genreLabel)}</span>`;
+      els.playerMeta.textContent = formatDate(video.publishedAt);
       loadVideoIntoPlayer(videoId);
       els.playerYoutubeLink.href = `https://www.youtube.com/watch?v=${videoId}`;
       els.watchArea.classList.remove('hidden');
-      els.nowPill.textContent = `再生中: ${video.genreLabel}`;
       updatePlayerButtons();
       renderRail();
       if (!wasPlaying) {
@@ -1461,7 +1295,6 @@
       els.playerFrame.src = '';
       els.watchArea.classList.add('hidden');
       activeVideoId = '';
-      els.nowPill.textContent = '未再生';
       render();
     }
 
@@ -1488,7 +1321,6 @@
 
     function shouldAutoFetch() {
       if (!getApiKey() || loading) return false;
-      if (activeVideoId) return false;
       if (!allVideos.length) return true;
       if (newestAvailableYear() <= 2022) return true;
       if (!lastCacheSavedAt) return false;
@@ -1505,7 +1337,6 @@
     function scheduleAutoFetch(delay = 500) {
       window.clearTimeout(autoFetchTimer);
       if (!getApiKey()) return;
-      els.syncPill.textContent = allVideos.length ? '自動更新待ち' : '自動取得待ち';
       autoFetchTimer = window.setTimeout(() => {
         if (shouldAutoFetch()) fetchVideos();
       }, delay);
@@ -1526,7 +1357,6 @@
       const cached = localStorage.getItem(CACHE_KEY);
       if (!cached) {
         populateYears();
-        populateGenres();
         render();
         scheduleAutoFetch(500);
         return;
@@ -1538,19 +1368,14 @@
           return;
         }
         lastCacheSavedAt = data.savedAt || '';
+        archiveComplete = Boolean(data.archiveComplete);
         allVideos = data.videos
           .filter(video => new Date(video.publishedAt) >= MIN_DATE)
           .map(normalizeVideo);
         populateYears();
-        populateGenres();
         render();
-        if (data.savedAt) {
-          els.syncPill.textContent = `${formatDate(data.savedAt)}取得`;
-        }
-        if (state.lastPlayed && allVideos.some(video => video.id === state.lastPlayed)) {
-          activeVideoId = state.lastPlayed;
-        }
         scheduleAutoFetch(900);
+        if (allVideos.length && !activeVideoId) randomVideo();
       } catch {
         localStorage.removeItem(CACHE_KEY);
         scheduleAutoFetch(500);
@@ -1589,11 +1414,6 @@
       render();
     });
     els.yearTo.addEventListener('change', () => {
-      visibleLimit = PAGE_SIZE;
-      ensureVideosAvailable(250);
-      render();
-    });
-    els.genre.addEventListener('change', () => {
       visibleLimit = PAGE_SIZE;
       ensureVideosAvailable(250);
       render();
