@@ -877,6 +877,7 @@
     let autoFetchTimer = 0;
     let lastCacheSavedAt = '';
     let archiveComplete = false;
+    let archiveNextPageToken = '';
     let state = loadState();
     let randomPlaybackEnabled = false;
 
@@ -925,6 +926,7 @@
       const payload = () => JSON.stringify({
         savedAt: lastCacheSavedAt,
         archiveComplete,
+        nextPageToken: archiveNextPageToken,
         videos: allVideos
       });
 
@@ -1003,11 +1005,11 @@
       setLoading(true);
       const hasCache = allVideos.length > 0;
       const canStopAtCache = hasCache && archiveComplete;
+      const isArchiveResume = !archiveComplete && Boolean(archiveNextPageToken);
       const cachedIds = new Set(allVideos.map(video => video.id));
-      const cachedVideos = allVideos;
       showError('');
       try {
-        let pageToken = '';
+        let pageToken = isArchiveResume ? archiveNextPageToken : '';
         let reachedBeforeMinDate = false;
         let reachedCachedVideo = false;
         const videos = [];
@@ -1032,8 +1034,8 @@
             }
             const videoId = item.contentDetails?.videoId || item.snippet?.resourceId?.videoId;
             if (!videoId) continue;
-            if (canStopAtCache && cachedIds.has(videoId)) {
-              reachedCachedVideo = true;
+            if (cachedIds.has(videoId)) {
+              if (canStopAtCache) reachedCachedVideo = true;
               continue;
             }
             videos.push(normalizeVideo({
@@ -1049,10 +1051,16 @@
                 || item.snippet?.thumbnails?.default?.url
                 || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
             }));
+            cachedIds.add(videoId);
           }
 
-          allVideos = dedupe([...videos, ...cachedVideos])
+          allVideos = dedupe([...videos, ...allVideos])
             .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+          const nextPageToken = data.nextPageToken || '';
+          if (!canStopAtCache) {
+            archiveComplete = reachedBeforeMinDate || !nextPageToken;
+            archiveNextPageToken = archiveComplete ? '' : nextPageToken;
+          }
           saveVideoCache();
 
           if (!firstPageReady) {
@@ -1064,11 +1072,12 @@
             if (!activeVideoId) randomVideo();
           }
 
-          pageToken = data.nextPageToken || '';
+          pageToken = nextPageToken;
           if (!pageToken || (canStopAtCache && reachedCachedVideo)) break;
         }
 
         archiveComplete = archiveComplete || reachedBeforeMinDate || !pageToken;
+        if (archiveComplete) archiveNextPageToken = '';
         saveVideoCache(false);
         populateYears();
         render();
@@ -1400,6 +1409,7 @@
         }
         lastCacheSavedAt = data.savedAt || '';
         archiveComplete = Boolean(data.archiveComplete);
+        archiveNextPageToken = archiveComplete ? '' : String(data.nextPageToken || '');
         allVideos = data.videos
           .filter(video => new Date(video.publishedAt) >= MIN_DATE)
           .map(normalizeVideo);
