@@ -820,8 +820,15 @@
     const MIN_DATE = new Date('2016-01-01T00:00:00Z');
     const STORAGE_KEY = 'fischers2017ViewerApiKey';
     const CACHE_KEY = 'fischers2017ViewerCacheV5';
+    const LEGACY_CACHE_KEYS = [
+      'fischers2017ViewerCache',
+      'fischers2017ViewerCacheV2',
+      'fischers2017ViewerCacheV3',
+      'fischers2017ViewerCacheV4'
+    ];
     const STATE_KEY = 'fischers2017ViewerState';
     const PAGE_SIZE = 36;
+    const CACHE_DESCRIPTION_LIMIT = 120;
     const AUTO_REFRESH_MS = 12 * 60 * 60 * 1000;
 
     const els = {
@@ -907,6 +914,32 @@
         watched: [...state.watched],
         lastPlayed: state.lastPlayed
       }));
+    }
+
+    function clearLegacyCaches() {
+      LEGACY_CACHE_KEYS.forEach(key => localStorage.removeItem(key));
+    }
+
+    function saveVideoCache(updateTimestamp = true) {
+      if (updateTimestamp) lastCacheSavedAt = new Date().toISOString();
+      const payload = () => JSON.stringify({
+        savedAt: lastCacheSavedAt,
+        archiveComplete,
+        videos: allVideos
+      });
+
+      try {
+        localStorage.setItem(CACHE_KEY, payload());
+        return true;
+      } catch {
+        allVideos = allVideos.map(video => ({ ...video, description: '' }));
+        try {
+          localStorage.setItem(CACHE_KEY, payload());
+          return true;
+        } catch {
+          return false;
+        }
+      }
     }
 
     function formatDate(value) {
@@ -1020,12 +1053,7 @@
 
           allVideos = dedupe([...videos, ...cachedVideos])
             .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
-          lastCacheSavedAt = new Date().toISOString();
-          localStorage.setItem(CACHE_KEY, JSON.stringify({
-            savedAt: lastCacheSavedAt,
-            archiveComplete,
-            videos: allVideos
-          }));
+          saveVideoCache();
 
           if (!firstPageReady) {
             firstPageReady = true;
@@ -1041,11 +1069,7 @@
         }
 
         archiveComplete = archiveComplete || reachedBeforeMinDate || !pageToken;
-        localStorage.setItem(CACHE_KEY, JSON.stringify({
-          savedAt: lastCacheSavedAt,
-          archiveComplete,
-          videos: allVideos
-        }));
+        saveVideoCache(false);
         populateYears();
         render();
         if (!activeVideoId) randomVideo();
@@ -1057,10 +1081,15 @@
     }
 
     function normalizeVideo(video) {
+      const description = String(video.description || '');
       return {
-        ...video,
+        id: String(video.id || ''),
+        title: String(video.title || '無題'),
+        description: description.slice(0, CACHE_DESCRIPTION_LIMIT),
+        publishedAt: video.publishedAt,
         year: video.year || new Date(video.publishedAt).getUTCFullYear(),
-        isShort: inferShort(video)
+        thumbnail: video.thumbnail || `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`,
+        isShort: Boolean(video.isShort) || inferShort(video)
       };
     }
 
@@ -1322,6 +1351,7 @@
     function shouldAutoFetch() {
       if (!getApiKey() || loading) return false;
       if (!allVideos.length) return true;
+      if (!archiveComplete) return true;
       if (newestAvailableYear() <= 2022) return true;
       if (!lastCacheSavedAt) return false;
       const savedTime = new Date(lastCacheSavedAt).getTime();
@@ -1349,6 +1379,7 @@
     }
 
     function restoreCache() {
+      clearLegacyCaches();
       const savedKey = localStorage.getItem(STORAGE_KEY);
       if (savedKey) {
         els.apiKey.value = savedKey;
@@ -1372,6 +1403,7 @@
         allVideos = data.videos
           .filter(video => new Date(video.publishedAt) >= MIN_DATE)
           .map(normalizeVideo);
+        saveVideoCache(false);
         populateYears();
         render();
         scheduleAutoFetch(900);
