@@ -309,9 +309,67 @@
     .player-frame {
       width: 100%;
       aspect-ratio: 16 / 9;
+      min-height: 200px;
       border: 0;
       display: block;
       background: #101418;
+    }
+
+    body.focus-mode {
+      background: #020617;
+    }
+
+    body.focus-mode .shell {
+      width: min(1100px, 100%);
+      padding: 0;
+    }
+
+    body.focus-mode header,
+    body.focus-mode .setup,
+    body.focus-mode .toolbar,
+    body.focus-mode .rail,
+    body.focus-mode .error-box,
+    body.focus-mode .grid,
+    body.focus-mode .empty,
+    body.focus-mode .more-row {
+      display: none;
+    }
+
+    body.focus-mode .watch-area {
+      display: block;
+      min-height: 100vh;
+      margin: 0;
+      border: 0;
+      border-radius: 0;
+      background: #020617;
+      box-shadow: none;
+    }
+
+    body.focus-mode .player-panel {
+      border: 0;
+    }
+
+    body.focus-mode .player-head {
+      color: #e6eefb;
+      border-color: #273b58;
+      background: #0b1220;
+    }
+
+    body.focus-mode .player-meta {
+      color: #aab9cf;
+    }
+
+    body.focus-mode .icon-button,
+    body.focus-mode .icon-link {
+      color: #e6eefb;
+      border-color: #273b58;
+      background: #111d2e;
+    }
+
+    body.focus-mode .icon-button.active {
+      color: #7dd3fc;
+      border-color: #2563eb;
+      background: #182b45;
     }
 
     .rail {
@@ -792,6 +850,7 @@
             <button class="icon-button" id="playerFavorite" type="button" title="お気に入り" aria-label="お気に入り"></button>
             <button class="icon-button" id="playerLater" type="button" title="あとで見る" aria-label="あとで見る"></button>
             <button class="icon-button" id="playerWatched" type="button" title="視聴済み" aria-label="視聴済み"></button>
+            <button class="icon-button" id="playerFocus" type="button" title="集中モード" aria-label="集中モード" aria-pressed="false"></button>
             <button class="icon-button" id="playerRandom" type="button" title="ランダム再生" aria-label="ランダム再生"></button>
             <a class="icon-link" id="playerYoutubeLink" href="#" target="_blank" rel="noreferrer" title="YouTubeで開く" aria-label="YouTubeで開く"></a>
             <button class="icon-button" id="closePlayer" type="button" title="閉じる" aria-label="閉じる"></button>
@@ -853,6 +912,7 @@
       playerFavorite: document.getElementById('playerFavorite'),
       playerLater: document.getElementById('playerLater'),
       playerWatched: document.getElementById('playerWatched'),
+      playerFocus: document.getElementById('playerFocus'),
       playerRandom: document.getElementById('playerRandom'),
       closePlayer: document.getElementById('closePlayer'),
       rail: document.getElementById('rail'),
@@ -867,6 +927,8 @@
       later: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>',
       play: '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg>',
       shuffle: '<svg viewBox="0 0 24 24"><path d="m18 14 4 4-4 4"></path><path d="m18 2 4 4-4 4"></path><path d="M2 18h1.9a6 6 0 0 0 5.2-3l5.8-10A6 6 0 0 1 20.1 2H22"></path><path d="M2 6h1.9a6 6 0 0 1 5.2 3l.8 1.4"></path><path d="M14 18h8"></path></svg>',
+      focus: '<svg viewBox="0 0 24 24"><path d="M15 3h6v6"></path><path d="m21 3-7 7"></path><path d="M9 21H3v-6"></path><path d="m3 21 7-7"></path></svg>',
+      focusExit: '<svg viewBox="0 0 24 24"><path d="M4 14h6v6"></path><path d="m10 14-7 7"></path><path d="M20 10h-6V4"></path><path d="m14 10 7-7"></path></svg>',
       check: '<svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"></path></svg>'
     };
 
@@ -880,6 +942,7 @@
     let archiveNextPageToken = '';
     let state = loadState();
     let randomPlaybackEnabled = false;
+    let focusModeEnabled = false;
 
     window.addEventListener('message', event => {
       if (event.origin !== 'https://www.youtube.com' || event.source !== els.playerFrame.contentWindow) return;
@@ -1330,6 +1393,7 @@
 
     function closePlayer() {
       randomPlaybackEnabled = false;
+      setFocusMode(false);
       els.playerFrame.src = '';
       els.watchArea.classList.add('hidden');
       activeVideoId = '';
@@ -1349,12 +1413,28 @@
       els.playerFavorite.innerHTML = icons.heart;
       els.playerLater.innerHTML = icons.later;
       els.playerWatched.innerHTML = icons.check;
+      updateFocusButton();
       els.playerRandom.innerHTML = icons.shuffle;
       els.closePlayer.innerHTML = icons.close;
       els.playerYoutubeLink.innerHTML = icons.external;
       els.playerFavorite.classList.toggle('active', state.favorites.has(activeVideoId));
       els.playerLater.classList.toggle('active', state.later.has(activeVideoId));
       els.playerWatched.classList.toggle('active', state.watched.has(activeVideoId));
+    }
+
+    function setFocusMode(enabled) {
+      focusModeEnabled = Boolean(enabled && activeVideoId);
+      document.body.classList.toggle('focus-mode', focusModeEnabled);
+      updateFocusButton();
+      if (focusModeEnabled) window.scrollTo({ top: 0, behavior: 'auto' });
+    }
+
+    function updateFocusButton() {
+      els.playerFocus.innerHTML = focusModeEnabled ? icons.focusExit : icons.focus;
+      els.playerFocus.classList.toggle('active', focusModeEnabled);
+      els.playerFocus.setAttribute('aria-pressed', String(focusModeEnabled));
+      els.playerFocus.title = focusModeEnabled ? '集中モードを終了' : '集中モード';
+      els.playerFocus.setAttribute('aria-label', els.playerFocus.title);
     }
 
     function shouldAutoFetch() {
@@ -1442,6 +1522,7 @@
     els.refresh.addEventListener('click', fetchVideos);
     els.randomPlay.addEventListener('click', randomVideo);
     els.playerRandom.addEventListener('click', randomVideo);
+    els.playerFocus.addEventListener('click', () => setFocusMode(!focusModeEnabled));
     els.playerFavorite.addEventListener('click', () => activeVideoId && toggleSet('favorites', activeVideoId));
     els.playerLater.addEventListener('click', () => activeVideoId && toggleSet('later', activeVideoId));
     els.playerWatched.addEventListener('click', () => activeVideoId && toggleSet('watched', activeVideoId));
@@ -1478,6 +1559,9 @@
     els.rail.addEventListener('click', handleVideoAction);
     els.playerFrame.addEventListener('load', subscribeToPlayerEvents);
     els.closePlayer.addEventListener('click', closePlayer);
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && focusModeEnabled) setFocusMode(false);
+    });
     els.apiKey.addEventListener('keydown', event => {
       if (event.key === 'Enter' && !loading) {
         saveApiKey();
@@ -1486,6 +1570,7 @@
     });
 
     updatePlayerButtons();
+    updateFocusButton();
     populateYears();
     restoreCache();
   </script>
