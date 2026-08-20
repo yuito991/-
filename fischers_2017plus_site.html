@@ -1,0 +1,1578 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fischer's 2016+ Viewer</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f5f9ff;
+      --panel: #ffffff;
+      --ink: #142033;
+      --muted: #5f6f86;
+      --line: #d8e6f7;
+      --accent: #2563eb;
+      --accent-2: #0ea5e9;
+      --accent-3: #38bdf8;
+      --soft: #eef6ff;
+      --shadow: 0 12px 34px rgba(20, 55, 98, .10);
+      --radius: 8px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        linear-gradient(180deg, rgba(37, 99, 235, .13), transparent 340px),
+        var(--bg);
+      color: var(--ink);
+      font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    button {
+      border: 0;
+      cursor: pointer;
+    }
+
+    a { color: inherit; }
+
+    .shell {
+      width: min(1220px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 20px 0 46px;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 18px;
+      align-items: end;
+      padding: 18px 0;
+    }
+
+    .brand {
+      display: flex;
+      gap: 13px;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      width: 54px;
+      aspect-ratio: 1;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      background: linear-gradient(135deg, var(--accent), #0f274f);
+      box-shadow: var(--shadow);
+      flex: 0 0 auto;
+    }
+
+    .brand-mark svg {
+      width: 28px;
+      height: 28px;
+      fill: currentColor;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.45rem, 3vw, 2.65rem);
+      line-height: 1.08;
+      letter-spacing: 0;
+    }
+
+    .header-tools {
+      display: grid;
+      gap: 10px;
+      justify-items: end;
+    }
+
+    .random-play {
+      min-width: 224px;
+      min-height: 58px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, .26);
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #fff;
+      padding: 0 22px;
+      font-size: 1.08rem;
+      font-weight: 900;
+      box-shadow: 0 12px 26px rgba(37, 99, 235, .28);
+    }
+
+    .random-play svg {
+      width: 24px;
+      height: 24px;
+      stroke: currentColor;
+      stroke-width: 2.2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .setup,
+    .toolbar,
+    .watch-area,
+    .empty,
+    .error-box {
+      background: rgba(255, 255, 255, .94);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .setup {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      padding: 16px;
+      margin: 8px 0 16px;
+    }
+
+    .setup.hidden,
+    .watch-area.hidden,
+    .empty.hidden,
+    .error-box.hidden,
+    .more-row.hidden {
+      display: none;
+    }
+
+    .setup h2 {
+      margin: 0 0 5px;
+      font-size: 1rem;
+    }
+
+    .setup p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .key-row {
+      display: flex;
+      gap: 8px;
+      min-width: min(570px, 100%);
+    }
+
+    .input,
+    .select {
+      width: 100%;
+      min-height: 42px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      padding: 0 12px;
+      outline: 0;
+    }
+
+    .input:focus,
+    .select:focus {
+      border-color: var(--accent-2);
+      box-shadow: 0 0 0 3px rgba(14, 165, 233, .16);
+    }
+
+    .button {
+      min-height: 42px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border-radius: 8px;
+      background: var(--ink);
+      color: #fff;
+      padding: 0 14px;
+      font-weight: 800;
+      white-space: nowrap;
+      text-decoration: none;
+    }
+
+    .button.secondary {
+      background: var(--panel);
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+
+    .button.accent {
+      background: var(--accent);
+    }
+
+    .button:disabled {
+      cursor: wait;
+      opacity: .68;
+    }
+
+    .button svg {
+      width: 17px;
+      height: 17px;
+      stroke: currentColor;
+      stroke-width: 2.2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      flex: 0 0 auto;
+    }
+
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: grid;
+      grid-template-columns: minmax(190px, 1.2fr) repeat(4, minmax(112px, .5fr)) auto;
+      gap: 9px;
+      align-items: center;
+      padding: 12px;
+      margin: 0 0 16px;
+    }
+
+    .search-wrap {
+      position: relative;
+    }
+
+    .search-wrap svg {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      width: 17px;
+      height: 17px;
+      transform: translateY(-50%);
+      stroke: var(--muted);
+      fill: none;
+      stroke-width: 2.2;
+      pointer-events: none;
+    }
+
+    .search-wrap .input {
+      padding-left: 38px;
+    }
+
+    .watch-area {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+      gap: 0;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+
+    .player-panel {
+      min-width: 0;
+      border-right: 1px solid var(--line);
+    }
+
+    .player-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .player-title {
+      margin: 0;
+      font-size: 1rem;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .player-meta {
+      margin-top: 6px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      color: var(--muted);
+      font-size: .86rem;
+    }
+
+    .player-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      justify-content: flex-end;
+    }
+
+    .player-frame {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      min-height: 200px;
+      border: 0;
+      display: block;
+      background: #101418;
+    }
+
+    body.focus-mode {
+      background: #020617;
+    }
+
+    body.focus-mode .shell {
+      width: min(1100px, 100%);
+      padding: 0;
+    }
+
+    body.focus-mode header,
+    body.focus-mode .setup,
+    body.focus-mode .toolbar,
+    body.focus-mode .rail,
+    body.focus-mode .error-box,
+    body.focus-mode .grid,
+    body.focus-mode .empty,
+    body.focus-mode .more-row {
+      display: none;
+    }
+
+    body.focus-mode .watch-area {
+      display: block;
+      min-height: 100vh;
+      margin: 0;
+      border: 0;
+      border-radius: 0;
+      background: #020617;
+      box-shadow: none;
+    }
+
+    body.focus-mode .player-panel {
+      border: 0;
+    }
+
+    body.focus-mode .player-head {
+      color: #e6eefb;
+      border-color: #273b58;
+      background: #0b1220;
+    }
+
+    body.focus-mode .player-meta {
+      color: #aab9cf;
+    }
+
+    body.focus-mode .icon-button,
+    body.focus-mode .icon-link {
+      color: #e6eefb;
+      border-color: #273b58;
+      background: #111d2e;
+    }
+
+    body.focus-mode .icon-button.active {
+      color: #7dd3fc;
+      border-color: #2563eb;
+      background: #182b45;
+    }
+
+    .rail {
+      min-height: 0;
+      background: #fbfcfa;
+    }
+
+    .rail-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .rail-title {
+      margin: 0;
+      font-size: .95rem;
+    }
+
+    .rail-list {
+      display: grid;
+      gap: 0;
+      max-height: 610px;
+      overflow: auto;
+    }
+
+    .rail-item {
+      display: grid;
+      grid-template-columns: 124px minmax(0, 1fr);
+      gap: 10px;
+      width: 100%;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      background: transparent;
+      color: var(--ink);
+      text-align: left;
+    }
+
+    .rail-item:hover,
+    .rail-item.active {
+      background: var(--soft);
+    }
+
+    .rail-thumb {
+      position: relative;
+      aspect-ratio: 16 / 9;
+      overflow: hidden;
+      border-radius: 6px;
+      background: #dfe5e1;
+    }
+
+    .rail-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .rail-info {
+      min-width: 0;
+    }
+
+    .rail-name {
+      margin: 0;
+      font-weight: 800;
+      line-height: 1.35;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .rail-date {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: .82rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
+      gap: 14px;
+      align-items: stretch;
+    }
+
+    .card {
+      min-width: 0;
+      overflow: hidden;
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      background: var(--panel);
+      box-shadow: 0 8px 24px rgba(20, 55, 98, .07);
+      display: grid;
+      grid-template-rows: auto 1fr;
+      position: relative;
+    }
+
+    .card.active {
+      outline: 3px solid rgba(37, 99, 235, .22);
+    }
+
+    .thumb-btn {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      padding: 0;
+      background: #dfe5e1;
+      overflow: hidden;
+    }
+
+    .thumb-btn img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: transform .18s ease;
+    }
+
+    .thumb-btn:hover img {
+      transform: scale(1.035);
+    }
+
+    .play-badge {
+      position: absolute;
+      left: 10px;
+      bottom: 10px;
+      width: 42px;
+      aspect-ratio: 1;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: rgba(37, 99, 235, .95);
+      color: #fff;
+      box-shadow: 0 7px 18px rgba(0, 0, 0, .22);
+    }
+
+    .play-badge svg {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+      transform: translateX(1px);
+    }
+
+    .watch-mark {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      border-radius: 999px;
+      background: rgba(20, 32, 51, .85);
+      color: #fff;
+      padding: 4px 8px;
+      font-size: .76rem;
+      font-weight: 800;
+    }
+
+    .card-body {
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 9px;
+      padding: 12px;
+    }
+
+    .title {
+      margin: 0;
+      font-weight: 800;
+      line-height: 1.42;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      min-height: 2.84em;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      color: var(--muted);
+      font-size: .86rem;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      border-radius: 999px;
+      background: var(--soft);
+      color: #3e4b55;
+      padding: 3px 8px;
+      font-size: .78rem;
+      font-weight: 800;
+    }
+
+    .description {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: .91rem;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      min-height: 4.1em;
+    }
+
+    .card-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .icon-link,
+    .icon-button {
+      width: 40px;
+      aspect-ratio: 1;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--ink);
+      text-decoration: none;
+    }
+
+    .icon-button.active {
+      background: var(--soft);
+      border-color: var(--accent-2);
+      color: var(--accent);
+    }
+
+    .icon-button svg,
+    .icon-link svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      stroke-width: 2.2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .empty,
+    .error-box {
+      padding: 28px;
+      text-align: center;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .error-box {
+      margin: 0 0 16px;
+      color: #8c1f1f;
+      background: #fff5f3;
+      border-color: #f0b5aa;
+    }
+
+    .more-row {
+      display: flex;
+      justify-content: center;
+      padding: 22px 0 0;
+    }
+
+    .spinner {
+      width: 17px;
+      aspect-ratio: 1;
+      border: 2px solid rgba(255, 255, 255, .42);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+      display: none;
+    }
+
+    .loading .spinner {
+      display: inline-block;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0a1220;
+        --panel: #111d2e;
+        --ink: #e6eefb;
+        --muted: #aab9cf;
+        --line: #273b58;
+        --accent: #38bdf8;
+        --accent-2: #2563eb;
+        --accent-3: #7dd3fc;
+        --soft: #182b45;
+        --shadow: 0 12px 34px rgba(0, 0, 0, .32);
+      }
+
+      body {
+        background: linear-gradient(180deg, rgba(56, 189, 248, .10), transparent 340px), var(--bg);
+      }
+
+      .setup,
+      .toolbar,
+      .watch-area,
+      .empty,
+      .error-box {
+        background: rgba(17, 29, 46, .94);
+      }
+
+      .input,
+      .select,
+      .rail {
+        background: #0d1828;
+      }
+
+      .tag {
+        color: var(--ink);
+      }
+
+      .thumb-btn,
+      .card .thumb-btn {
+        background: #17263b;
+      }
+
+      .random-play {
+        box-shadow: 0 12px 26px rgba(0, 0, 0, .34);
+      }
+    }
+
+    @media (max-width: 1060px) {
+      .toolbar {
+        grid-template-columns: minmax(210px, 1fr) repeat(4, minmax(112px, 1fr)) auto;
+      }
+
+      .toolbar .library-control {
+        grid-column: 2 / span 2;
+      }
+    }
+
+    @media (max-width: 820px) {
+      .shell {
+        width: min(100% - 20px, 680px);
+        padding-top: 10px;
+      }
+
+      header,
+      .setup,
+      .toolbar {
+        grid-template-columns: 1fr;
+        align-items: stretch;
+      }
+
+      .header-tools {
+        justify-items: stretch;
+      }
+
+      .random-play {
+        width: 100%;
+      }
+
+      .key-row {
+        min-width: 0;
+        flex-direction: column;
+      }
+
+      .toolbar {
+        position: static;
+      }
+
+      .toolbar .library-control {
+        grid-column: auto;
+      }
+
+      .watch-area {
+        grid-template-columns: 1fr;
+      }
+
+      .player-panel {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .player-head {
+        grid-template-columns: 1fr;
+      }
+
+      .player-actions {
+        justify-content: flex-start;
+      }
+
+      .rail-list {
+        max-height: 48vh;
+      }
+
+      .rail-item {
+        grid-template-columns: 132px minmax(0, 1fr);
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg>
+        </div>
+        <div>
+          <h1>Fischer's 2016+ Viewer</h1>
+        </div>
+      </div>
+      <div class="header-tools">
+        <button class="random-play" id="randomPlay" type="button">
+          <svg viewBox="0 0 24 24"><path d="m18 14 4 4-4 4"></path><path d="m18 2 4 4-4 4"></path><path d="M2 18h1.9a6 6 0 0 0 5.2-3l5.8-10A6 6 0 0 1 20.1 2H22"></path><path d="M2 6h1.9a6 6 0 0 1 5.2 3l.8 1.4"></path><path d="M14 18h8"></path></svg>
+          ランダム再生
+        </button>
+      </div>
+    </header>
+
+    <section class="setup" id="setup">
+      <div>
+        <h2>YouTube Data API キー</h2>
+        <p>キーはこのブラウザ内だけに保存されます。動画取得後はキャッシュ・お気に入り・あとで見る・視聴済みもローカル保存します。</p>
+      </div>
+      <div class="key-row">
+        <input class="input" id="apiKey" type="password" autocomplete="off" placeholder="APIキーを入力">
+        <button class="button accent" id="saveKey" type="button">
+          <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><path d="M17 21v-8H7v8"></path><path d="M7 3v5h8"></path></svg>
+          保存して取得
+        </button>
+        <a class="button secondary" href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noreferrer">APIを開く</a>
+      </div>
+    </section>
+
+    <section class="toolbar" aria-label="動画の絞り込み">
+      <label class="search-wrap">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+        <input class="input" id="query" type="search" placeholder="タイトル・説明で検索">
+      </label>
+      <select class="select" id="yearFrom" aria-label="開始年">
+        <option value="2016">2016年から</option>
+      </select>
+      <select class="select" id="yearTo" aria-label="終了年">
+        <option value="all">最新まで</option>
+      </select>
+      <select class="select" id="sort">
+        <option value="new">新しい順</option>
+        <option value="old">古い順</option>
+        <option value="title">タイトル順</option>
+        <option value="unwatched">未視聴優先</option>
+        <option value="random">ランダム順</option>
+      </select>
+      <select class="select library-control" id="libraryFilter">
+        <option value="all">すべて</option>
+        <option value="unwatched">未視聴</option>
+        <option value="watched">視聴済み</option>
+        <option value="favorite">お気に入り</option>
+        <option value="later">あとで見る</option>
+      </select>
+      <button class="button" id="refresh" type="button">
+        <span class="spinner" aria-hidden="true"></span>
+        <svg class="refresh-icon" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"></path><path d="M3 21v-5h5"></path><path d="M3 12A9 9 0 0 1 18.5 5.8L21 8"></path><path d="M21 3v5h-5"></path></svg>
+        更新
+      </button>
+    </section>
+
+    <section class="watch-area hidden" id="watchArea">
+      <div class="player-panel">
+        <div class="player-head">
+          <div>
+            <h2 class="player-title" id="playerTitle"></h2>
+            <div class="player-meta" id="playerMeta"></div>
+          </div>
+          <div class="player-actions">
+            <button class="icon-button" id="playerFavorite" type="button" title="お気に入り" aria-label="お気に入り"></button>
+            <button class="icon-button" id="playerLater" type="button" title="あとで見る" aria-label="あとで見る"></button>
+            <button class="icon-button" id="playerWatched" type="button" title="視聴済み" aria-label="視聴済み"></button>
+            <button class="icon-button" id="playerFocus" type="button" title="集中モード" aria-label="集中モード" aria-pressed="false"></button>
+            <button class="icon-button" id="playerRandom" type="button" title="ランダム再生" aria-label="ランダム再生"></button>
+            <a class="icon-link" id="playerYoutubeLink" href="#" target="_blank" rel="noreferrer" title="YouTubeで開く" aria-label="YouTubeで開く"></a>
+            <button class="icon-button" id="closePlayer" type="button" title="閉じる" aria-label="閉じる"></button>
+          </div>
+        </div>
+        <iframe class="player-frame" id="playerFrame" title="YouTube player" loading="eager" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen webkitallowfullscreen></iframe>
+      </div>
+      <aside class="rail" aria-label="ほかの動画">
+        <div class="rail-head">
+          <h2 class="rail-title">次に見る候補</h2>
+        </div>
+        <div class="rail-list" id="rail"></div>
+      </aside>
+    </section>
+
+    <section class="error-box hidden" id="errorBox"></section>
+    <section class="grid" id="grid" aria-live="polite"></section>
+    <section class="empty hidden" id="empty">表示できる動画がありません。</section>
+    <div class="more-row hidden" id="moreRow">
+      <button class="button secondary" id="loadMore" type="button">さらに表示</button>
+    </div>
+  </main>
+
+  <script>
+    const UPLOADS_PLAYLIST_ID = 'UUibEhpu5HP45-w7Bq1ZIulw';
+    const MIN_DATE = new Date('2016-01-01T00:00:00Z');
+    const STORAGE_KEY = 'fischers2017ViewerApiKey';
+    const CACHE_KEY = 'fischers2017ViewerCacheV5';
+    const LEGACY_CACHE_KEYS = [
+      'fischers2017ViewerCache',
+      'fischers2017ViewerCacheV2',
+      'fischers2017ViewerCacheV3',
+      'fischers2017ViewerCacheV4'
+    ];
+    const STATE_KEY = 'fischers2017ViewerState';
+    const PAGE_SIZE = 36;
+    const CACHE_DESCRIPTION_LIMIT = 120;
+    const AUTO_REFRESH_MS = 12 * 60 * 60 * 1000;
+
+    const els = {
+      setup: document.getElementById('setup'),
+      apiKey: document.getElementById('apiKey'),
+      saveKey: document.getElementById('saveKey'),
+      refresh: document.getElementById('refresh'),
+      randomPlay: document.getElementById('randomPlay'),
+      query: document.getElementById('query'),
+      yearFrom: document.getElementById('yearFrom'),
+      yearTo: document.getElementById('yearTo'),
+      sort: document.getElementById('sort'),
+      libraryFilter: document.getElementById('libraryFilter'),
+      grid: document.getElementById('grid'),
+      empty: document.getElementById('empty'),
+      errorBox: document.getElementById('errorBox'),
+      watchArea: document.getElementById('watchArea'),
+      playerTitle: document.getElementById('playerTitle'),
+      playerMeta: document.getElementById('playerMeta'),
+      playerFrame: document.getElementById('playerFrame'),
+      playerYoutubeLink: document.getElementById('playerYoutubeLink'),
+      playerFavorite: document.getElementById('playerFavorite'),
+      playerLater: document.getElementById('playerLater'),
+      playerWatched: document.getElementById('playerWatched'),
+      playerFocus: document.getElementById('playerFocus'),
+      playerRandom: document.getElementById('playerRandom'),
+      closePlayer: document.getElementById('closePlayer'),
+      rail: document.getElementById('rail'),
+      moreRow: document.getElementById('moreRow'),
+      loadMore: document.getElementById('loadMore')
+    };
+
+    const icons = {
+      close: '<svg viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>',
+      external: '<svg viewBox="0 0 24 24"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg>',
+      heart: '<svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"></path></svg>',
+      later: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>',
+      play: '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg>',
+      shuffle: '<svg viewBox="0 0 24 24"><path d="m18 14 4 4-4 4"></path><path d="m18 2 4 4-4 4"></path><path d="M2 18h1.9a6 6 0 0 0 5.2-3l5.8-10A6 6 0 0 1 20.1 2H22"></path><path d="M2 6h1.9a6 6 0 0 1 5.2 3l.8 1.4"></path><path d="M14 18h8"></path></svg>',
+      focus: '<svg viewBox="0 0 24 24"><path d="M15 3h6v6"></path><path d="m21 3-7 7"></path><path d="M9 21H3v-6"></path><path d="m3 21 7-7"></path></svg>',
+      focusExit: '<svg viewBox="0 0 24 24"><path d="M4 14h6v6"></path><path d="m10 14-7 7"></path><path d="M20 10h-6V4"></path><path d="m14 10 7-7"></path></svg>',
+      check: '<svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"></path></svg>'
+    };
+
+    let allVideos = [];
+    let visibleLimit = PAGE_SIZE;
+    let loading = false;
+    let activeVideoId = '';
+    let autoFetchTimer = 0;
+    let lastCacheSavedAt = '';
+    let archiveComplete = false;
+    let archiveNextPageToken = '';
+    let state = loadState();
+    let randomPlaybackEnabled = false;
+    let focusModeEnabled = false;
+
+    window.addEventListener('message', event => {
+      if (event.origin !== 'https://www.youtube.com' || event.source !== els.playerFrame.contentWindow) return;
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        const playerState = data?.event === 'onStateChange'
+          ? Number(data.info)
+          : Number(data?.info?.playerState);
+        if (playerState === 0) handleYoutubeStateChange();
+      } catch {
+        // Ignore unrelated YouTube player messages.
+      }
+    });
+
+    function loadState() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(STATE_KEY) || '{}');
+        return {
+          favorites: new Set(saved.favorites || []),
+          later: new Set(saved.later || []),
+          watched: new Set(saved.watched || []),
+          lastPlayed: saved.lastPlayed || ''
+        };
+      } catch {
+        return { favorites: new Set(), later: new Set(), watched: new Set(), lastPlayed: '' };
+      }
+    }
+
+    function saveState() {
+      localStorage.setItem(STATE_KEY, JSON.stringify({
+        favorites: [...state.favorites],
+        later: [...state.later],
+        watched: [...state.watched],
+        lastPlayed: state.lastPlayed
+      }));
+    }
+
+    function clearLegacyCaches() {
+      LEGACY_CACHE_KEYS.forEach(key => localStorage.removeItem(key));
+    }
+
+    function saveVideoCache(updateTimestamp = true) {
+      if (updateTimestamp) lastCacheSavedAt = new Date().toISOString();
+      const payload = () => JSON.stringify({
+        savedAt: lastCacheSavedAt,
+        archiveComplete,
+        nextPageToken: archiveNextPageToken,
+        videos: allVideos
+      });
+
+      try {
+        localStorage.setItem(CACHE_KEY, payload());
+        return true;
+      } catch {
+        allVideos = allVideos.map(video => ({ ...video, description: '' }));
+        try {
+          localStorage.setItem(CACHE_KEY, payload());
+          return true;
+        } catch {
+          return false;
+        }
+      }
+    }
+
+    function formatDate(value) {
+      return new Intl.DateTimeFormat('ja-JP', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).format(new Date(value));
+    }
+
+    function setLoading(next) {
+      loading = next;
+      els.refresh.disabled = next;
+      els.saveKey.disabled = next;
+      els.refresh.classList.toggle('loading', next);
+      els.saveKey.classList.toggle('loading', next);
+    }
+
+    function showError(message) {
+      els.errorBox.textContent = message;
+      els.errorBox.classList.toggle('hidden', !message);
+    }
+
+    function getApiKey() {
+      return els.apiKey.value.trim() || localStorage.getItem(STORAGE_KEY) || '';
+    }
+
+    function saveApiKey() {
+      const key = els.apiKey.value.trim();
+      if (key) {
+        localStorage.setItem(STORAGE_KEY, key);
+        els.setup.classList.add('hidden');
+      }
+      return key;
+    }
+
+    async function apiGet(path, params) {
+      const url = new URL(`https://www.googleapis.com/youtube/v3/${path}`);
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          url.searchParams.set(key, value);
+        }
+      });
+      const response = await fetch(url);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const reason = data.error?.message || `${response.status} ${response.statusText}`;
+        throw new Error(reason);
+      }
+      return data;
+    }
+
+    async function fetchVideos() {
+      const apiKey = getApiKey();
+      if (!apiKey) {
+        els.setup.classList.remove('hidden');
+        showError('YouTube Data API キーを入力してください。');
+        return;
+      }
+
+      setLoading(true);
+      const hasCache = allVideos.length > 0;
+      const canStopAtCache = hasCache && archiveComplete;
+      const isArchiveResume = !archiveComplete && Boolean(archiveNextPageToken);
+      const cachedIds = new Set(allVideos.map(video => video.id));
+      showError('');
+      try {
+        let pageToken = isArchiveResume ? archiveNextPageToken : '';
+        let reachedBeforeMinDate = false;
+        let reachedCachedVideo = false;
+        const videos = [];
+        let firstPageReady = false;
+
+        while (!reachedBeforeMinDate) {
+          const data = await apiGet('playlistItems', {
+            part: 'snippet,contentDetails',
+            playlistId: UPLOADS_PLAYLIST_ID,
+            maxResults: 50,
+            pageToken,
+            key: apiKey
+          });
+
+          for (const item of data.items || []) {
+            const publishedAt = item.contentDetails?.videoPublishedAt || item.snippet?.publishedAt;
+            if (!publishedAt) continue;
+            const publishedDate = new Date(publishedAt);
+            if (publishedDate < MIN_DATE) {
+              reachedBeforeMinDate = true;
+              continue;
+            }
+            const videoId = item.contentDetails?.videoId || item.snippet?.resourceId?.videoId;
+            if (!videoId) continue;
+            if (cachedIds.has(videoId)) {
+              if (canStopAtCache) reachedCachedVideo = true;
+              continue;
+            }
+            videos.push(normalizeVideo({
+              id: videoId,
+              title: item.snippet?.title || '無題',
+              description: item.snippet?.description || '',
+              publishedAt,
+              year: publishedDate.getUTCFullYear(),
+              thumbnail: item.snippet?.thumbnails?.maxres?.url
+                || item.snippet?.thumbnails?.standard?.url
+                || item.snippet?.thumbnails?.high?.url
+                || item.snippet?.thumbnails?.medium?.url
+                || item.snippet?.thumbnails?.default?.url
+                || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
+            }));
+            cachedIds.add(videoId);
+          }
+
+          allVideos = dedupe([...videos, ...allVideos])
+            .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+          const nextPageToken = data.nextPageToken || '';
+          if (!canStopAtCache) {
+            archiveComplete = reachedBeforeMinDate || !nextPageToken;
+            archiveNextPageToken = archiveComplete ? '' : nextPageToken;
+          }
+          saveVideoCache();
+
+          if (!firstPageReady) {
+            firstPageReady = true;
+            visibleLimit = PAGE_SIZE;
+            populateYears();
+            render();
+            els.setup.classList.add('hidden');
+            if (!activeVideoId) randomVideo();
+          }
+
+          pageToken = nextPageToken;
+          if (!pageToken || (canStopAtCache && reachedCachedVideo)) break;
+        }
+
+        archiveComplete = archiveComplete || reachedBeforeMinDate || !pageToken;
+        if (archiveComplete) archiveNextPageToken = '';
+        saveVideoCache(false);
+        populateYears();
+        render();
+        if (!activeVideoId) randomVideo();
+      } catch (error) {
+        showError(`取得に失敗しました: ${error.message}`);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    function normalizeVideo(video) {
+      const description = String(video.description || '');
+      return {
+        id: String(video.id || ''),
+        title: String(video.title || '無題'),
+        description: description.slice(0, CACHE_DESCRIPTION_LIMIT),
+        publishedAt: video.publishedAt,
+        year: video.year || new Date(video.publishedAt).getUTCFullYear(),
+        thumbnail: video.thumbnail || `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`,
+        isShort: Boolean(video.isShort) || inferShort(video)
+      };
+    }
+
+    function inferShort(video) {
+      const text = `${video.title || ''}\n${video.description || ''}`.toLowerCase();
+      return /#(?:shorts?|ショート(?:動画)?)(?![A-Za-z0-9_ぁ-んァ-ン一-龯])/i.test(text);
+    }
+
+    function dedupe(videos) {
+      return Array.from(new Map(videos.map(video => [video.id, video])).values());
+    }
+
+    function populateYears() {
+      const currentFrom = els.yearFrom.value || '2016';
+      const years = allSelectableYears().sort((a, b) => b - a);
+      const ascending = [...years].sort((a, b) => a - b);
+      const yearOptions = ascending.length ? ascending : [2016];
+      const latestYear = Math.max(...yearOptions);
+      const previousTo = els.yearTo.value || 'all';
+      const currentTo = previousTo !== 'all' && Number(previousTo) <= 2022 && latestYear > Number(previousTo)
+        ? 'all'
+        : previousTo;
+      els.yearFrom.innerHTML = yearOptions.map(year => `<option value="${year}">${year}年から</option>`).join('');
+      els.yearTo.innerHTML = '<option value="all">最新まで</option>' + years.map(year => `<option value="${year}">${year}年まで</option>`).join('');
+      els.yearFrom.value = [...els.yearFrom.options].some(option => option.value === currentFrom) ? currentFrom : String(yearOptions[0]);
+      els.yearTo.value = [...els.yearTo.options].some(option => option.value === currentTo) ? currentTo : 'all';
+    }
+
+    function allSelectableYears() {
+      const latestDataYear = Math.max(2016, ...availableVideos().map(video => video.year));
+      const latestYear = Math.max(new Date().getFullYear(), latestDataYear);
+      const years = [];
+      for (let year = 2016; year <= latestYear; year += 1) {
+        years.push(year);
+      }
+      return years;
+    }
+
+    function filteredVideos() {
+      const query = els.query.value.trim().toLowerCase();
+      const selectedFrom = Number(els.yearFrom.value || 2016);
+      const selectedTo = els.yearTo.value === 'all' ? Infinity : Number(els.yearTo.value);
+      const yearFrom = Math.min(selectedFrom, selectedTo);
+      const yearTo = Math.max(selectedFrom, selectedTo);
+      const library = els.libraryFilter.value;
+      const sort = els.sort.value;
+      const videos = availableVideos().filter(video => {
+        const yearMatch = video.year >= yearFrom && video.year <= yearTo;
+        const queryMatch = !query || `${video.title}\n${video.description}`.toLowerCase().includes(query);
+        const libraryMatch =
+          library === 'all'
+          || (library === 'unwatched' && !state.watched.has(video.id))
+          || (library === 'watched' && state.watched.has(video.id))
+          || (library === 'favorite' && state.favorites.has(video.id))
+          || (library === 'later' && state.later.has(video.id));
+        return yearMatch && queryMatch && libraryMatch;
+      });
+
+      if (sort === 'old') {
+        videos.sort((a, b) => new Date(a.publishedAt) - new Date(b.publishedAt));
+      } else if (sort === 'title') {
+        videos.sort((a, b) => a.title.localeCompare(b.title, 'ja'));
+      } else if (sort === 'unwatched') {
+        videos.sort((a, b) => Number(state.watched.has(a.id)) - Number(state.watched.has(b.id)) || new Date(b.publishedAt) - new Date(a.publishedAt));
+      } else if (sort === 'random') {
+        videos.sort((a, b) => seededRank(a.id) - seededRank(b.id));
+      } else {
+        videos.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+      }
+      return videos;
+    }
+
+    function availableVideos() {
+      return allVideos.filter(video => !video.isShort);
+    }
+
+    function seededRank(value) {
+      let hash = 0;
+      for (let index = 0; index < value.length; index += 1) {
+        hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+      }
+      return hash;
+    }
+
+    function render() {
+      const videos = filteredVideos();
+      const rendered = videos.slice(0, visibleLimit);
+      els.empty.classList.toggle('hidden', rendered.length > 0);
+      els.moreRow.classList.toggle('hidden', rendered.length >= videos.length);
+
+      els.grid.innerHTML = rendered.map(video => videoCard(video)).join('');
+      updatePlayerButtons();
+      renderRail();
+    }
+
+    function videoCard(video) {
+      const isFavorite = state.favorites.has(video.id);
+      const isLater = state.later.has(video.id);
+      const isWatched = state.watched.has(video.id);
+      const isActive = activeVideoId === video.id;
+      return `
+        <article class="card ${isActive ? 'active' : ''}">
+          <button class="thumb-btn" type="button" data-action="play" data-id="${video.id}" aria-label="${escapeAttr(video.title)}を再生">
+            <img src="${escapeAttr(video.thumbnail)}" alt="" loading="lazy">
+            ${isWatched ? '<span class="watch-mark">視聴済み</span>' : ''}
+            <span class="play-badge" aria-hidden="true">${icons.play}</span>
+          </button>
+          <div class="card-body">
+            <h2 class="title">${escapeHtml(video.title)}</h2>
+            <div class="meta">
+              <span>${formatDate(video.publishedAt)}</span>
+            </div>
+            <p class="description">${escapeHtml(video.description || '説明文なし')}</p>
+            <div class="card-actions">
+              <button class="icon-button" type="button" data-action="play" data-id="${video.id}" title="再生" aria-label="再生">${icons.play}</button>
+              <button class="icon-button ${isFavorite ? 'active' : ''}" type="button" data-action="favorite" data-id="${video.id}" title="お気に入り" aria-label="お気に入り">${icons.heart}</button>
+              <button class="icon-button ${isLater ? 'active' : ''}" type="button" data-action="later" data-id="${video.id}" title="あとで見る" aria-label="あとで見る">${icons.later}</button>
+              <button class="icon-button ${isWatched ? 'active' : ''}" type="button" data-action="watched" data-id="${video.id}" title="視聴済み" aria-label="視聴済み">${icons.check}</button>
+              <a class="icon-link" href="https://www.youtube.com/watch?v=${video.id}" target="_blank" rel="noreferrer" title="YouTubeで開く" aria-label="YouTubeで開く">${icons.external}</a>
+            </div>
+          </div>
+        </article>
+      `;
+    }
+
+    function renderRail() {
+      if (!activeVideoId) return;
+      const candidates = filteredVideos().filter(video => video.id !== activeVideoId);
+      const videos = shuffleVideos(candidates).slice(0, 18);
+      els.rail.innerHTML = videos.map(video => `
+        <button class="rail-item" type="button" data-action="play" data-id="${video.id}">
+          <span class="rail-thumb"><img src="${escapeAttr(video.thumbnail)}" alt="" loading="lazy"></span>
+          <span class="rail-info">
+            <span class="rail-name">${escapeHtml(video.title)}</span>
+            <span class="rail-date">${formatDate(video.publishedAt)}</span>
+          </span>
+        </button>
+      `).join('');
+    }
+
+    function shuffleVideos(videos) {
+      const shuffled = [...videos];
+      for (let index = shuffled.length - 1; index > 0; index -= 1) {
+        const swapIndex = randomIndex(index + 1);
+        [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+      }
+      return shuffled;
+    }
+
+    function randomIndex(length) {
+      const secureCrypto = window.crypto || window.msCrypto;
+      return secureCrypto?.getRandomValues
+        ? secureCrypto.getRandomValues(new Uint32Array(1))[0] % length
+        : Math.floor(Math.random() * length);
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+      }[char]));
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replace(/`/g, '&#096;');
+    }
+
+    function randomVideo() {
+      randomPlaybackEnabled = true;
+      const currentId = activeVideoId;
+      const pool = filteredVideos().filter(video => video.id !== currentId);
+      const source = pool.length
+        ? pool
+        : availableVideos().filter(video => video.id !== currentId);
+      if (!source.length) {
+        randomPlaybackEnabled = false;
+        showError('動画を取得してからランダム再生できます。');
+        return;
+      }
+      play(source[randomIndex(source.length)].id, true);
+    }
+
+    function loadVideoIntoPlayer(videoId) {
+      const origin = /^https?:$/.test(window.location.protocol)
+        ? `&origin=${encodeURIComponent(window.location.origin)}`
+        : '';
+      els.playerFrame.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&enablejsapi=1&rel=0${origin}`;
+    }
+
+    function subscribeToPlayerEvents() {
+      const target = els.playerFrame.contentWindow;
+      if (!target) return;
+      const base = { id: 'playerFrame', channel: 'widget' };
+      target.postMessage(JSON.stringify({ ...base, event: 'listening' }), 'https://www.youtube.com');
+      target.postMessage(JSON.stringify({ ...base, event: 'command', func: 'addEventListener', args: ['onStateChange'] }), 'https://www.youtube.com');
+    }
+
+    function handleYoutubeStateChange() {
+      if (!randomPlaybackEnabled || !activeVideoId) return;
+      window.setTimeout(() => {
+        if (randomPlaybackEnabled && activeVideoId) randomVideo();
+      }, 250);
+    }
+
+    function play(videoId, keepRandomPlayback = false) {
+      const video = allVideos.find(item => item.id === videoId);
+      if (!video) return;
+      if (activeVideoId === videoId) return;
+      if (!keepRandomPlayback) randomPlaybackEnabled = false;
+      const wasPlaying = Boolean(activeVideoId);
+      activeVideoId = videoId;
+      state.lastPlayed = videoId;
+      state.watched.add(videoId);
+      saveState();
+      els.playerTitle.textContent = video.title;
+      els.playerMeta.textContent = formatDate(video.publishedAt);
+      loadVideoIntoPlayer(videoId);
+      els.playerYoutubeLink.href = `https://www.youtube.com/watch?v=${videoId}`;
+      els.watchArea.classList.remove('hidden');
+      updatePlayerButtons();
+      renderRail();
+      if (!wasPlaying) {
+        requestAnimationFrame(() => els.watchArea.scrollIntoView({ behavior: 'auto', block: 'start' }));
+      }
+    }
+
+    function closePlayer() {
+      randomPlaybackEnabled = false;
+      setFocusMode(false);
+      els.playerFrame.src = '';
+      els.watchArea.classList.add('hidden');
+      activeVideoId = '';
+      render();
+    }
+
+    function toggleSet(setName, videoId) {
+      const target = state[setName];
+      if (target.has(videoId)) target.delete(videoId);
+      else target.add(videoId);
+      saveState();
+      render();
+    }
+
+    function updatePlayerButtons() {
+      if (!activeVideoId) return;
+      els.playerFavorite.innerHTML = icons.heart;
+      els.playerLater.innerHTML = icons.later;
+      els.playerWatched.innerHTML = icons.check;
+      updateFocusButton();
+      els.playerRandom.innerHTML = icons.shuffle;
+      els.closePlayer.innerHTML = icons.close;
+      els.playerYoutubeLink.innerHTML = icons.external;
+      els.playerFavorite.classList.toggle('active', state.favorites.has(activeVideoId));
+      els.playerLater.classList.toggle('active', state.later.has(activeVideoId));
+      els.playerWatched.classList.toggle('active', state.watched.has(activeVideoId));
+    }
+
+    function setFocusMode(enabled) {
+      focusModeEnabled = Boolean(enabled && activeVideoId);
+      document.body.classList.toggle('focus-mode', focusModeEnabled);
+      updateFocusButton();
+      if (focusModeEnabled) window.scrollTo({ top: 0, behavior: 'auto' });
+    }
+
+    function updateFocusButton() {
+      els.playerFocus.innerHTML = focusModeEnabled ? icons.focusExit : icons.focus;
+      els.playerFocus.classList.toggle('active', focusModeEnabled);
+      els.playerFocus.setAttribute('aria-pressed', String(focusModeEnabled));
+      els.playerFocus.title = focusModeEnabled ? '集中モードを終了' : '集中モード';
+      els.playerFocus.setAttribute('aria-label', els.playerFocus.title);
+    }
+
+    function shouldAutoFetch() {
+      if (!getApiKey() || loading) return false;
+      if (!allVideos.length) return true;
+      if (!archiveComplete) return true;
+      if (newestAvailableYear() <= 2022) return true;
+      if (!lastCacheSavedAt) return false;
+      const savedTime = new Date(lastCacheSavedAt).getTime();
+      if (!Number.isFinite(savedTime)) return false;
+      return Date.now() - savedTime > AUTO_REFRESH_MS;
+    }
+
+    function newestAvailableYear() {
+      const years = availableVideos().map(video => video.year).filter(Boolean);
+      return years.length ? Math.max(...years) : 0;
+    }
+
+    function scheduleAutoFetch(delay = 500) {
+      window.clearTimeout(autoFetchTimer);
+      if (!getApiKey()) return;
+      autoFetchTimer = window.setTimeout(() => {
+        if (shouldAutoFetch()) fetchVideos();
+      }, delay);
+    }
+
+    function ensureVideosAvailable(delay = 300) {
+      if (!allVideos.length) {
+        scheduleAutoFetch(delay);
+      }
+    }
+
+    function restoreCache() {
+      clearLegacyCaches();
+      const savedKey = localStorage.getItem(STORAGE_KEY);
+      if (savedKey) {
+        els.apiKey.value = savedKey;
+        els.setup.classList.add('hidden');
+      }
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (!cached) {
+        populateYears();
+        render();
+        scheduleAutoFetch(500);
+        return;
+      }
+      try {
+        const data = JSON.parse(cached);
+        if (!Array.isArray(data.videos)) {
+          scheduleAutoFetch(500);
+          return;
+        }
+        lastCacheSavedAt = data.savedAt || '';
+        archiveComplete = Boolean(data.archiveComplete);
+        archiveNextPageToken = archiveComplete ? '' : String(data.nextPageToken || '');
+        allVideos = data.videos
+          .filter(video => new Date(video.publishedAt) >= MIN_DATE)
+          .map(normalizeVideo);
+        saveVideoCache(false);
+        populateYears();
+        render();
+        scheduleAutoFetch(900);
+        if (allVideos.length && !activeVideoId) randomVideo();
+      } catch {
+        localStorage.removeItem(CACHE_KEY);
+        scheduleAutoFetch(500);
+      }
+    }
+
+    function handleVideoAction(event) {
+      const target = event.target.closest('[data-action]');
+      if (!target) return;
+      const action = target.dataset.action;
+      const id = target.dataset.id;
+      if (action === 'play' && id) play(id);
+      if (action === 'favorite' && id) toggleSet('favorites', id);
+      if (action === 'later' && id) toggleSet('later', id);
+      if (action === 'watched' && id) toggleSet('watched', id);
+    }
+
+    els.saveKey.addEventListener('click', () => {
+      saveApiKey();
+      fetchVideos();
+    });
+    els.refresh.addEventListener('click', fetchVideos);
+    els.randomPlay.addEventListener('click', randomVideo);
+    els.playerRandom.addEventListener('click', randomVideo);
+    els.playerFocus.addEventListener('click', () => setFocusMode(!focusModeEnabled));
+    els.playerFavorite.addEventListener('click', () => activeVideoId && toggleSet('favorites', activeVideoId));
+    els.playerLater.addEventListener('click', () => activeVideoId && toggleSet('later', activeVideoId));
+    els.playerWatched.addEventListener('click', () => activeVideoId && toggleSet('watched', activeVideoId));
+    els.query.addEventListener('input', () => {
+      visibleLimit = PAGE_SIZE;
+      ensureVideosAvailable(250);
+      render();
+    });
+    els.yearFrom.addEventListener('change', () => {
+      visibleLimit = PAGE_SIZE;
+      ensureVideosAvailable(250);
+      render();
+    });
+    els.yearTo.addEventListener('change', () => {
+      visibleLimit = PAGE_SIZE;
+      ensureVideosAvailable(250);
+      render();
+    });
+    els.sort.addEventListener('change', () => {
+      visibleLimit = PAGE_SIZE;
+      ensureVideosAvailable(250);
+      render();
+    });
+    els.libraryFilter.addEventListener('change', () => {
+      visibleLimit = PAGE_SIZE;
+      ensureVideosAvailable(250);
+      render();
+    });
+    els.loadMore.addEventListener('click', () => {
+      visibleLimit += PAGE_SIZE;
+      render();
+    });
+    els.grid.addEventListener('click', handleVideoAction);
+    els.rail.addEventListener('click', handleVideoAction);
+    els.playerFrame.addEventListener('load', subscribeToPlayerEvents);
+    els.closePlayer.addEventListener('click', closePlayer);
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && focusModeEnabled) setFocusMode(false);
+    });
+    els.apiKey.addEventListener('keydown', event => {
+      if (event.key === 'Enter' && !loading) {
+        saveApiKey();
+        fetchVideos();
+      }
+    });
+
+    updatePlayerButtons();
+    updateFocusButton();
+    populateYears();
+    restoreCache();
+  </script>
+</body>
+</html>
