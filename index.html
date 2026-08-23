@@ -689,6 +689,87 @@
       font-variant-numeric: tabular-nums;
     }
 
+    .delay-puzzle {
+      width: min(100%, 286px);
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .delay-puzzle[hidden] {
+      display: none;
+    }
+
+    .puzzle-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .puzzle-status {
+      margin: 0;
+      color: var(--muted);
+      font-size: .9rem;
+      font-weight: 800;
+    }
+
+    .puzzle-reset {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--ink);
+      background: var(--soft);
+    }
+
+    .puzzle-reset svg {
+      width: 18px;
+      height: 18px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .puzzle-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 7px;
+    }
+
+    .puzzle-tile {
+      width: 100%;
+      aspect-ratio: 1;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: var(--ink);
+      background: var(--soft);
+      font-size: 1.15rem;
+      font-weight: 900;
+    }
+
+    .puzzle-tile.solved {
+      color: #fff;
+      border-color: #15803d;
+      background: #15803d;
+    }
+
+    .puzzle-tile.miss {
+      border-color: #dc2626;
+      color: #dc2626;
+      animation: puzzle-miss .24s ease;
+    }
+
+    @keyframes puzzle-miss {
+      50% { transform: translateX(3px); }
+    }
+
     body.delay-locked .thumb-btn,
     body.delay-locked .rail-item {
       opacity: .52;
@@ -846,6 +927,15 @@
         <span id="delayButtonLabel">1分先延ばしする</span>
       </button>
       <p class="delay-status" id="delayStatus" aria-live="polite"></p>
+      <div class="delay-puzzle" id="delayPuzzle" hidden>
+        <div class="puzzle-head">
+          <p class="puzzle-status" id="puzzleStatus" aria-live="polite">次は 1</p>
+          <button class="puzzle-reset" id="puzzleReset" type="button" title="並べ直す" aria-label="並べ直す">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"></path><path d="M20 4v7h-7"></path></svg>
+          </button>
+        </div>
+        <div class="puzzle-grid" id="puzzleGrid"></div>
+      </div>
     </section>
     <header>
       <div class="brand">
@@ -994,7 +1084,11 @@
       delayGuard: document.getElementById('delayGuard'),
       delayButton: document.getElementById('delayButton'),
       delayButtonLabel: document.getElementById('delayButtonLabel'),
-      delayStatus: document.getElementById('delayStatus')
+      delayStatus: document.getElementById('delayStatus'),
+      delayPuzzle: document.getElementById('delayPuzzle'),
+      puzzleStatus: document.getElementById('puzzleStatus'),
+      puzzleReset: document.getElementById('puzzleReset'),
+      puzzleGrid: document.getElementById('puzzleGrid')
     };
 
     const icons = {
@@ -1022,6 +1116,8 @@
     let focusModeEnabled = false;
     let delayTimer = 0;
     let suppressAutoPlayback = Number(state.delayUntil || 0) > 0;
+    let puzzleExpected = 1;
+    let puzzleValues = [];
 
     window.addEventListener('message', event => {
       if (event.origin !== 'https://www.youtube.com' || event.source !== els.playerFrame.contentWindow) return;
@@ -1078,8 +1174,10 @@
       els.delayButton.disabled = locked;
       els.randomPlay.disabled = locked;
       els.playerRandom.disabled = locked;
+      els.delayPuzzle.hidden = !locked;
 
       if (locked) {
+        if (!puzzleValues.length) resetDelayPuzzle();
         const totalSeconds = Math.max(1, Math.ceil(remaining / 1000));
         const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
         const seconds = String(totalSeconds % 60).padStart(2, '0');
@@ -1090,11 +1188,45 @@
       }
 
       els.delayButtonLabel.textContent = '1分先延ばしする';
+      puzzleValues = [];
       if (hadDelay) {
         state.delayUntil = 0;
         saveState();
         els.delayStatus.textContent = '1分経ちました。動画を選べます。';
       }
+    }
+
+    function resetDelayPuzzle() {
+      puzzleExpected = 1;
+      puzzleValues = Array.from({ length: 9 }, (_, index) => index + 1);
+      for (let index = puzzleValues.length - 1; index > 0; index -= 1) {
+        const swapIndex = randomIndex(index + 1);
+        [puzzleValues[index], puzzleValues[swapIndex]] = [puzzleValues[swapIndex], puzzleValues[index]];
+      }
+      if (puzzleValues.every((value, index) => value === index + 1)) {
+        [puzzleValues[0], puzzleValues[1]] = [puzzleValues[1], puzzleValues[0]];
+      }
+      els.puzzleStatus.textContent = '次は 1';
+      els.puzzleGrid.innerHTML = puzzleValues.map(value => `
+        <button class="puzzle-tile" type="button" data-puzzle-value="${value}" aria-label="${value}">${value}</button>
+      `).join('');
+    }
+
+    function handlePuzzleClick(event) {
+      const tile = event.target.closest('[data-puzzle-value]');
+      if (!tile || !isDelayLocked() || tile.disabled) return;
+      const value = Number(tile.dataset.puzzleValue);
+      if (value !== puzzleExpected) {
+        tile.classList.remove('miss');
+        requestAnimationFrame(() => tile.classList.add('miss'));
+        window.setTimeout(() => tile.classList.remove('miss'), 260);
+        return;
+      }
+
+      tile.disabled = true;
+      tile.classList.add('solved');
+      puzzleExpected += 1;
+      els.puzzleStatus.textContent = puzzleExpected > 9 ? '完成！' : `次は ${puzzleExpected}`;
     }
 
     function showDelayGuard() {
@@ -1672,6 +1804,8 @@
     els.randomPlay.addEventListener('click', randomVideo);
     els.playerRandom.addEventListener('click', randomVideo);
     els.delayButton.addEventListener('click', startDelay);
+    els.puzzleReset.addEventListener('click', () => isDelayLocked() && resetDelayPuzzle());
+    els.puzzleGrid.addEventListener('click', handlePuzzleClick);
     els.playerFocus.addEventListener('click', () => setFocusMode(!focusModeEnabled));
     els.playerFavorite.addEventListener('click', () => activeVideoId && toggleSet('favorites', activeVideoId));
     els.playerLater.addEventListener('click', () => activeVideoId && toggleSet('later', activeVideoId));
