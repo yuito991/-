@@ -634,6 +634,70 @@
       padding: 22px 0 0;
     }
 
+    .delay-guard {
+      display: grid;
+      justify-items: center;
+      gap: 12px;
+      margin-top: 34px;
+      padding: 26px 0 8px;
+      border-top: 1px solid var(--line);
+      text-align: center;
+    }
+
+    .delay-quote {
+      margin: 0;
+      color: var(--ink);
+      font-size: clamp(1.2rem, 2.5vw, 1.75rem);
+      font-weight: 900;
+      line-height: 1.35;
+    }
+
+    .delay-button {
+      min-height: 56px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 0 22px;
+      border-radius: 8px;
+      color: #fff;
+      background: #0f274f;
+      font-weight: 900;
+      box-shadow: var(--shadow);
+    }
+
+    .delay-button svg {
+      width: 22px;
+      height: 22px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .delay-button:disabled {
+      cursor: wait;
+      opacity: .78;
+    }
+
+    .delay-status {
+      min-height: 1.5em;
+      margin: 0;
+      color: var(--muted);
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    body.delay-locked .thumb-btn,
+    body.delay-locked .rail-item {
+      opacity: .52;
+    }
+
+    body.focus-mode .delay-guard {
+      display: none;
+    }
+
     .spinner {
       width: 17px;
       aspect-ratio: 1;
@@ -872,6 +936,14 @@
     <div class="more-row hidden" id="moreRow">
       <button class="button secondary" id="loadMore" type="button">さらに表示</button>
     </div>
+    <section class="delay-guard" id="delayGuard" aria-label="1分先延ばし">
+      <p class="delay-quote">将来の時間を売り飛ばすか？</p>
+      <button class="delay-button" id="delayButton" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+        <span id="delayButtonLabel">1分先延ばしする</span>
+      </button>
+      <p class="delay-status" id="delayStatus" aria-live="polite"></p>
+    </section>
   </main>
 
   <script>
@@ -888,6 +960,7 @@
     const STATE_KEY = 'fischers2017ViewerState';
     const PAGE_SIZE = 36;
     const CACHE_DESCRIPTION_LIMIT = 120;
+    const DELAY_MS = 60 * 1000;
     const AUTO_REFRESH_MS = 12 * 60 * 60 * 1000;
 
     const els = {
@@ -917,7 +990,11 @@
       closePlayer: document.getElementById('closePlayer'),
       rail: document.getElementById('rail'),
       moreRow: document.getElementById('moreRow'),
-      loadMore: document.getElementById('loadMore')
+      loadMore: document.getElementById('loadMore'),
+      delayGuard: document.getElementById('delayGuard'),
+      delayButton: document.getElementById('delayButton'),
+      delayButtonLabel: document.getElementById('delayButtonLabel'),
+      delayStatus: document.getElementById('delayStatus')
     };
 
     const icons = {
@@ -943,6 +1020,8 @@
     let state = loadState();
     let randomPlaybackEnabled = false;
     let focusModeEnabled = false;
+    let delayTimer = 0;
+    let suppressAutoPlayback = Number(state.delayUntil || 0) > 0;
 
     window.addEventListener('message', event => {
       if (event.origin !== 'https://www.youtube.com' || event.source !== els.playerFrame.contentWindow) return;
@@ -964,10 +1043,11 @@
           favorites: new Set(saved.favorites || []),
           later: new Set(saved.later || []),
           watched: new Set(saved.watched || []),
-          lastPlayed: saved.lastPlayed || ''
+          lastPlayed: saved.lastPlayed || '',
+          delayUntil: Number(saved.delayUntil || 0)
         };
       } catch {
-        return { favorites: new Set(), later: new Set(), watched: new Set(), lastPlayed: '' };
+        return { favorites: new Set(), later: new Set(), watched: new Set(), lastPlayed: '', delayUntil: 0 };
       }
     }
 
@@ -976,8 +1056,71 @@
         favorites: [...state.favorites],
         later: [...state.later],
         watched: [...state.watched],
-        lastPlayed: state.lastPlayed
+        lastPlayed: state.lastPlayed,
+        delayUntil: Number(state.delayUntil || 0)
       }));
+    }
+
+    function remainingDelayMs() {
+      return Math.max(0, Number(state.delayUntil || 0) - Date.now());
+    }
+
+    function isDelayLocked() {
+      return remainingDelayMs() > 0;
+    }
+
+    function updateDelayGuard() {
+      window.clearTimeout(delayTimer);
+      const remaining = remainingDelayMs();
+      const locked = remaining > 0;
+      const hadDelay = Number(state.delayUntil || 0) > 0;
+      document.body.classList.toggle('delay-locked', locked);
+      els.delayButton.disabled = locked;
+      els.randomPlay.disabled = locked;
+      els.playerRandom.disabled = locked;
+
+      if (locked) {
+        const totalSeconds = Math.max(1, Math.ceil(remaining / 1000));
+        const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+        const seconds = String(totalSeconds % 60).padStart(2, '0');
+        els.delayButtonLabel.textContent = '1分先延ばし中';
+        els.delayStatus.textContent = `あと ${minutes}:${seconds}`;
+        delayTimer = window.setTimeout(updateDelayGuard, 250);
+        return;
+      }
+
+      els.delayButtonLabel.textContent = '1分先延ばしする';
+      if (hadDelay) {
+        state.delayUntil = 0;
+        saveState();
+        els.delayStatus.textContent = '1分経ちました。動画を選べます。';
+      }
+    }
+
+    function showDelayGuard() {
+      updateDelayGuard();
+      requestAnimationFrame(() => {
+        els.delayGuard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
+
+    function blockPlaybackForDelay() {
+      if (!isDelayLocked()) return false;
+      randomPlaybackEnabled = false;
+      showDelayGuard();
+      return true;
+    }
+
+    function startDelay() {
+      if (isDelayLocked()) return;
+      state.delayUntil = Date.now() + DELAY_MS;
+      suppressAutoPlayback = true;
+      randomPlaybackEnabled = false;
+      saveState();
+      updateDelayGuard();
+      if (activeVideoId) closePlayer();
+      showError('');
+      showDelayGuard();
     }
 
     function clearLegacyCaches() {
@@ -1132,7 +1275,7 @@
             populateYears();
             render();
             els.setup.classList.add('hidden');
-            if (!activeVideoId) randomVideo();
+            if (!activeVideoId && !suppressAutoPlayback && !isDelayLocked()) randomVideo(true);
           }
 
           pageToken = nextPageToken;
@@ -1144,7 +1287,7 @@
         saveVideoCache(false);
         populateYears();
         render();
-        if (!activeVideoId) randomVideo();
+        if (!activeVideoId && !suppressAutoPlayback && !isDelayLocked()) randomVideo(true);
       } catch (error) {
         showError(`取得に失敗しました: ${error.message}`);
       } finally {
@@ -1332,7 +1475,9 @@
       return escapeHtml(value).replace(/`/g, '&#096;');
     }
 
-    function randomVideo() {
+    function randomVideo(isAutomatic = false) {
+      if (blockPlaybackForDelay()) return;
+      if (isAutomatic !== true) suppressAutoPlayback = false;
       randomPlaybackEnabled = true;
       const currentId = activeVideoId;
       const pool = filteredVideos().filter(video => video.id !== currentId);
@@ -1365,15 +1510,19 @@
     function handleYoutubeStateChange() {
       if (!randomPlaybackEnabled || !activeVideoId) return;
       window.setTimeout(() => {
-        if (randomPlaybackEnabled && activeVideoId) randomVideo();
+        if (randomPlaybackEnabled && activeVideoId) randomVideo(true);
       }, 250);
     }
 
     function play(videoId, keepRandomPlayback = false) {
+      if (blockPlaybackForDelay()) return;
       const video = allVideos.find(item => item.id === videoId);
       if (!video) return;
       if (activeVideoId === videoId) return;
-      if (!keepRandomPlayback) randomPlaybackEnabled = false;
+      if (!keepRandomPlayback) {
+        randomPlaybackEnabled = false;
+        suppressAutoPlayback = false;
+      }
       const wasPlaying = Boolean(activeVideoId);
       activeVideoId = videoId;
       state.lastPlayed = videoId;
@@ -1497,7 +1646,7 @@
         populateYears();
         render();
         scheduleAutoFetch(900);
-        if (allVideos.length && !activeVideoId) randomVideo();
+        if (allVideos.length && !activeVideoId && !suppressAutoPlayback && !isDelayLocked()) randomVideo(true);
       } catch {
         localStorage.removeItem(CACHE_KEY);
         scheduleAutoFetch(500);
@@ -1522,6 +1671,7 @@
     els.refresh.addEventListener('click', fetchVideos);
     els.randomPlay.addEventListener('click', randomVideo);
     els.playerRandom.addEventListener('click', randomVideo);
+    els.delayButton.addEventListener('click', startDelay);
     els.playerFocus.addEventListener('click', () => setFocusMode(!focusModeEnabled));
     els.playerFavorite.addEventListener('click', () => activeVideoId && toggleSet('favorites', activeVideoId));
     els.playerLater.addEventListener('click', () => activeVideoId && toggleSet('later', activeVideoId));
@@ -1571,6 +1721,7 @@
 
     updatePlayerButtons();
     updateFocusButton();
+    updateDelayGuard();
     populateYears();
     restoreCache();
   </script>
