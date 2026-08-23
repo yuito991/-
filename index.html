@@ -638,9 +638,9 @@
       display: grid;
       justify-items: center;
       gap: 12px;
-      margin-top: 34px;
-      padding: 26px 0 8px;
-      border-top: 1px solid var(--line);
+      margin: 0 0 10px;
+      padding: 10px 0 18px;
+      border-bottom: 1px solid var(--line);
       text-align: center;
     }
 
@@ -839,6 +839,14 @@
 </head>
 <body>
   <main class="shell">
+    <section class="delay-guard" id="delayGuard" aria-label="1分先延ばし">
+      <p class="delay-quote">言い訳は無料だが、失った時間は高くつく</p>
+      <button class="delay-button" id="delayButton" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+        <span id="delayButtonLabel">1分先延ばしする</span>
+      </button>
+      <p class="delay-status" id="delayStatus" aria-live="polite"></p>
+    </section>
     <header>
       <div class="brand">
         <div class="brand-mark" aria-hidden="true">
@@ -936,14 +944,6 @@
     <div class="more-row hidden" id="moreRow">
       <button class="button secondary" id="loadMore" type="button">さらに表示</button>
     </div>
-    <section class="delay-guard" id="delayGuard" aria-label="1分先延ばし">
-      <p class="delay-quote">将来の時間を売り飛ばすか？</p>
-      <button class="delay-button" id="delayButton" type="button">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
-        <span id="delayButtonLabel">1分先延ばしする</span>
-      </button>
-      <p class="delay-status" id="delayStatus" aria-live="polite"></p>
-    </section>
   </main>
 
   <script>
