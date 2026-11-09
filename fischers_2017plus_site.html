@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Fischer's 2016+ Viewer</title>
+  <title>Fischer's Quest</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -771,215 +771,564 @@
         grid-template-columns: 1fr;
       }
     }
+
+    [hidden] { display: none !important; }
+    .header-tools { display: none; }
+    h1 { font-size: 1.6rem; }
+    .quest-summary { padding: 18px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-bottom: 18px; }
+    .quest-heading { margin: 0 0 12px; font-size: 1.1rem; }
+    .quest-stats { display: flex; flex-wrap: wrap; gap: 20px 32px; align-items: end; }
+    .quest-stat { display: grid; gap: 4px; }
+    .quest-stat dt { color: var(--muted); font-size: .85rem; }
+    .quest-stat dd { margin: 0; font-size: 1.2rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .quest-stats .button { margin-left: auto; min-height: 48px; }
+    .quest-note { min-height: 1.4em; margin: 10px 0 0; color: var(--muted); font-size: .85rem; }
+    .quest-list { margin: 14px 0 0; padding: 0; list-style: none; }
+    .quest-row { display: grid; grid-template-columns: 26px 76px minmax(0,1fr) auto; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); }
+    .quest-row img { width: 76px; aspect-ratio: 16/9; object-fit: cover; border-radius: 4px; }
+    .quest-row-title { margin: 0; font-size: .9rem; overflow-wrap: anywhere; }
+    .quest-row small { color: var(--muted); }
+    .quest-row-tools { display: flex; gap: 4px; }
+    .quest-row-tools button { width: 34px; height: 38px; }
+    .selection-mark { position: absolute; right: 9px; top: 9px; min-width: 30px; height: 30px; display: grid; place-items: center; background: #fff; color: #142033; border-radius: 4px; font-weight: 900; box-shadow: 0 1px 4px #0006; }
+    .card.selected { outline: 2px solid var(--accent); }
+    .duration-badge { position: absolute; right: 8px; bottom: 8px; padding: 3px 5px; border-radius: 3px; color: #fff; background: #000d; font-size: .8rem; }
+    .selection-button { width: 100%; min-height: 42px; background: var(--soft); border: 1px solid var(--line); border-radius: 6px; color: var(--ink); font-weight: 700; }
+    .watch-area { display: block; }
+    .player-panel { border: 0; }
+    .player-frame { width: 100%; min-height: 200px; aspect-ratio: 16/9; border: 0; }
+    .player-head { display: block; }
+    .player-title { margin-top: 8px; }
+    .player-progress { margin: 0; color: var(--accent); font-size: .9rem; font-weight: 800; }
+    .player-message { color: var(--muted); padding: 8px 0; min-height: 1.5em; }
+    .resume-row { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; }
+    .cooldown { position: fixed; inset: 0; z-index: 100; display: grid; align-content: center; justify-items: center; gap: 18px; padding: 24px; background: #000; color: #eee; text-align: center; }
+    .cooldown h2 { font-size: 1.2rem; margin: 0; font-weight: 600; }
+    .cooldown-time { font-size: 3rem; font-variant-numeric: tabular-nums; margin: 0; }
+    .cooldown p:last-child { margin: 0; color: #999; font-size: .9rem; }
+    body.site-locked { background: #000; }
+    body.site-locked .shell { display: none; }
+    button:disabled { cursor: not-allowed; opacity: .5; }
+    button:focus-visible, a:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 3px; }
+    @media (max-width: 600px) {
+      .quest-stats { gap: 12px 20px; }
+      .quest-stats .button { width: 100%; margin-left: 0; }
+      .quest-row { grid-template-columns: 20px 56px minmax(0,1fr); gap: 7px; }
+      .quest-row img { width: 56px; }
+      .quest-row-tools { grid-column: 3; justify-content: end; }
+      .quest-stat dd { font-size: 1.08rem; }
+    }
   </style>
 </head>
+
 <body>
-  <main class="shell">
+  <main class="shell" id="app">
     <header>
       <div class="brand">
-        <div class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg>
-        </div>
-        <div>
-          <h1>Fischer's 2016+ Viewer</h1>
-        </div>
-      </div>
-      <div class="header-tools">
-        <button class="random-play" id="randomPlay" type="button">
-          <svg viewBox="0 0 24 24"><path d="m18 14 4 4-4 4"></path><path d="m18 2 4 4-4 4"></path><path d="M2 18h1.9a6 6 0 0 0 5.2-3l5.8-10A6 6 0 0 1 20.1 2H22"></path><path d="M2 6h1.9a6 6 0 0 1 5.2 3l.8 1.4"></path><path d="M14 18h8"></path></svg>
-          ランダム再生
-        </button>
+        <div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg></div>
+        <div><h1>Fischer's Quest</h1></div>
       </div>
     </header>
-
-    <section class="setup" id="setup">
-      <div>
-        <h2>YouTube Data API キー</h2>
-        <p>キーはこのブラウザ内だけに保存されます。動画取得後はキャッシュ・お気に入り・あとで見る・視聴済みもローカル保存します。</p>
+    <section class="quest-summary" id="planning" aria-labelledby="questHeading">
+      <h2 class="quest-heading" id="questHeading">今回の動画</h2>
+      <div class="quest-stats">
+        <dl class="quest-stat"><dt>選択した動画</dt><dd id="queueCount">0本</dd></dl>
+        <dl class="quest-stat"><dt>合計時間</dt><dd id="totalDuration">0分</dd></dl>
+        <dl class="quest-stat"><dt>今から見たら終了予定</dt><dd id="finishTime">--:--</dd></dl>
+        <button class="button accent" id="startQuest" type="button" disabled>クエスト開始</button>
       </div>
-      <div class="key-row">
-        <input class="input" id="apiKey" type="password" autocomplete="off" placeholder="APIキーを入力">
-        <button class="button accent" id="saveKey" type="button">
-          <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><path d="M17 21v-8H7v8"></path><path d="M7 3v5h8"></path></svg>
-          保存して取得
-        </button>
-        <a class="button secondary" href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noreferrer">APIを開く</a>
-      </div>
+      <p class="quest-note" id="queueNote" role="status"></p>
+      <button class="button secondary" id="retryDurations" type="button" hidden>動画時間を再取得</button>
+      <ol class="quest-list" id="questList"></ol>
     </section>
-
-    <section class="toolbar" aria-label="動画の絞り込み">
-      <label class="search-wrap">
-        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
-        <input class="input" id="query" type="search" placeholder="タイトル・説明で検索">
-      </label>
-      <select class="select" id="yearFrom" aria-label="開始年">
-        <option value="2016">2016年から</option>
-      </select>
-      <select class="select" id="yearTo" aria-label="終了年">
-        <option value="all">最新まで</option>
-      </select>
-      <select class="select" id="sort">
-        <option value="new">新しい順</option>
-        <option value="old">古い順</option>
-        <option value="title">タイトル順</option>
-        <option value="unwatched">未視聴優先</option>
-        <option value="random">ランダム順</option>
-      </select>
-      <select class="select library-control" id="libraryFilter">
-        <option value="all">すべて</option>
-        <option value="unwatched">未視聴</option>
-        <option value="watched">視聴済み</option>
-        <option value="favorite">お気に入り</option>
-        <option value="later">あとで見る</option>
-      </select>
-      <button class="button" id="refresh" type="button">
-        <span class="spinner" aria-hidden="true"></span>
-        <svg class="refresh-icon" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"></path><path d="M3 21v-5h5"></path><path d="M3 12A9 9 0 0 1 18.5 5.8L21 8"></path><path d="M21 3v5h-5"></path></svg>
-        更新
-      </button>
-    </section>
-
-    <section class="watch-area hidden" id="watchArea">
+    <section class="watch-area" id="watchArea" hidden aria-label="クエスト再生">
       <div class="player-panel">
         <div class="player-head">
-          <div>
-            <h2 class="player-title" id="playerTitle"></h2>
-            <div class="player-meta" id="playerMeta"></div>
-          </div>
-          <div class="player-actions">
-            <button class="icon-button" id="playerFavorite" type="button" title="お気に入り" aria-label="お気に入り"></button>
-            <button class="icon-button" id="playerLater" type="button" title="あとで見る" aria-label="あとで見る"></button>
-            <button class="icon-button" id="playerWatched" type="button" title="視聴済み" aria-label="視聴済み"></button>
-            <button class="icon-button" id="playerFocus" type="button" title="集中モード" aria-label="集中モード" aria-pressed="false"></button>
-            <button class="icon-button" id="playerRandom" type="button" title="ランダム再生" aria-label="ランダム再生"></button>
-            <a class="icon-link" id="playerYoutubeLink" href="#" target="_blank" rel="noreferrer" title="YouTubeで開く" aria-label="YouTubeで開く"></a>
-            <button class="icon-button" id="closePlayer" type="button" title="閉じる" aria-label="閉じる"></button>
-          </div>
+          <p class="player-progress" id="playerProgress"></p>
+          <h2 class="player-title" id="playerTitle"></h2>
+          <div class="player-meta" id="playerMeta"></div>
         </div>
-        <iframe class="player-frame" id="playerFrame" title="YouTube player" loading="eager" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen webkitallowfullscreen></iframe>
+        <div id="playerMount"></div>
       </div>
-      <aside class="rail" aria-label="ほかの動画">
-        <div class="rail-head">
-          <h2 class="rail-title">次に見る候補</h2>
-        </div>
-        <div class="rail-list" id="rail"></div>
-      </aside>
+      <div class="player-message" id="playerMessage" role="status"></div>
+      <div class="resume-row">
+        <button class="button" id="resumeQuest" type="button">再生を再開</button>
+        <button class="button secondary" id="retryPlayer" type="button" hidden>同じ動画を再読み込み</button>
+      </div>
     </section>
-
-    <section class="error-box hidden" id="errorBox"></section>
-    <section class="grid" id="grid" aria-live="polite"></section>
-    <section class="empty hidden" id="empty">表示できる動画がありません。</section>
-    <div class="more-row hidden" id="moreRow">
-      <button class="button secondary" id="loadMore" type="button">さらに表示</button>
+    <section class="error-box hidden" id="errorBox" role="alert"></section>
+    <div id="catalog">
+      <section class="setup" id="setup">
+        <div><h2>YouTube Data API キー</h2><p>キーはこのブラウザ内に保存されます。</p></div>
+        <div class="key-row">
+          <input class="input" id="apiKey" type="password" autocomplete="off" placeholder="APIキーを入力" aria-label="APIキー">
+          <button class="button accent" id="saveKey" type="button">保存して取得</button>
+        </div>
+      </section>
+      <section class="toolbar" aria-label="動画の絞り込み">
+        <input class="input" id="query" type="search" placeholder="タイトル・説明で検索" aria-label="動画を検索">
+        <select class="select" id="yearFrom" aria-label="開始年"><option value="2016">2016年から</option></select>
+        <select class="select" id="yearTo" aria-label="終了年"><option value="all">最新まで</option></select>
+        <select class="select" id="sort" aria-label="並び順">
+          <option value="new">新しい順</option><option value="old">古い順</option>
+          <option value="title">タイトル順</option><option value="unwatched">未視聴優先</option>
+        </select>
+        <select class="select library-control" id="libraryFilter" aria-label="視聴状態">
+          <option value="all">すべて</option><option value="unwatched">未視聴</option><option value="watched">視聴済み</option>
+          <option value="favorite">お気に入り</option><option value="later">あとで見る</option>
+        </select>
+        <button class="button" id="refresh" type="button">更新</button>
+      </section>
+      <section class="grid" id="grid" aria-label="動画一覧"></section>
+      <section class="empty hidden" id="empty">表示できる動画がありません。</section>
+      <div class="more-row hidden" id="moreRow"><button class="button secondary" id="loadMore" type="button">さらに表示</button></div>
     </div>
   </main>
+  <section class="cooldown" id="cooldown" hidden role="dialog" aria-modal="true" aria-labelledby="lockTitle">
+    <h2 id="lockTitle" tabindex="-1">視聴は終了しました</h2>
+    <p class="cooldown-time" id="lockRemaining">30:00</p>
+    <p id="unlockTime"></p>
+  </section>
 
   <script>
+
     const UPLOADS_PLAYLIST_ID = 'UUibEhpu5HP45-w7Bq1ZIulw';
     const MIN_DATE = new Date('2016-01-01T00:00:00Z');
     const STORAGE_KEY = 'fischers2017ViewerApiKey';
     const CACHE_KEY = 'fischers2017ViewerCacheV5';
-    const LEGACY_CACHE_KEYS = [
-      'fischers2017ViewerCache',
-      'fischers2017ViewerCacheV2',
-      'fischers2017ViewerCacheV3',
-      'fischers2017ViewerCacheV4'
-    ];
     const STATE_KEY = 'fischers2017ViewerState';
+    const QUEST_KEY = 'fischersQuestV1';
+    const LOCK_KEY = 'fischersQuestLockUntilV1';
+    const LEGACY_CACHE_KEYS = ['fischers2017ViewerCache', 'fischers2017ViewerCacheV2', 'fischers2017ViewerCacheV3', 'fischers2017ViewerCacheV4'];
     const PAGE_SIZE = 36;
     const CACHE_DESCRIPTION_LIMIT = 120;
     const AUTO_REFRESH_MS = 12 * 60 * 60 * 1000;
-
-    const els = {
-      setup: document.getElementById('setup'),
-      apiKey: document.getElementById('apiKey'),
-      saveKey: document.getElementById('saveKey'),
-      refresh: document.getElementById('refresh'),
-      randomPlay: document.getElementById('randomPlay'),
-      query: document.getElementById('query'),
-      yearFrom: document.getElementById('yearFrom'),
-      yearTo: document.getElementById('yearTo'),
-      sort: document.getElementById('sort'),
-      libraryFilter: document.getElementById('libraryFilter'),
-      grid: document.getElementById('grid'),
-      empty: document.getElementById('empty'),
-      errorBox: document.getElementById('errorBox'),
-      watchArea: document.getElementById('watchArea'),
-      playerTitle: document.getElementById('playerTitle'),
-      playerMeta: document.getElementById('playerMeta'),
-      playerFrame: document.getElementById('playerFrame'),
-      playerYoutubeLink: document.getElementById('playerYoutubeLink'),
-      playerFavorite: document.getElementById('playerFavorite'),
-      playerLater: document.getElementById('playerLater'),
-      playerWatched: document.getElementById('playerWatched'),
-      playerFocus: document.getElementById('playerFocus'),
-      playerRandom: document.getElementById('playerRandom'),
-      closePlayer: document.getElementById('closePlayer'),
-      rail: document.getElementById('rail'),
-      moreRow: document.getElementById('moreRow'),
-      loadMore: document.getElementById('loadMore')
-    };
-
-    const icons = {
-      close: '<svg viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>',
-      external: '<svg viewBox="0 0 24 24"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg>',
-      heart: '<svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"></path></svg>',
-      later: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>',
-      play: '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg>',
-      shuffle: '<svg viewBox="0 0 24 24"><path d="m18 14 4 4-4 4"></path><path d="m18 2 4 4-4 4"></path><path d="M2 18h1.9a6 6 0 0 0 5.2-3l5.8-10A6 6 0 0 1 20.1 2H22"></path><path d="M2 6h1.9a6 6 0 0 1 5.2 3l.8 1.4"></path><path d="M14 18h8"></path></svg>',
-      focus: '<svg viewBox="0 0 24 24"><path d="M15 3h6v6"></path><path d="m21 3-7 7"></path><path d="M9 21H3v-6"></path><path d="m3 21 7-7"></path></svg>',
-      focusExit: '<svg viewBox="0 0 24 24"><path d="M4 14h6v6"></path><path d="m10 14-7 7"></path><path d="M20 10h-6V4"></path><path d="m14 10 7-7"></path></svg>',
-      check: '<svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"></path></svg>'
-    };
-
+    const COOLDOWN_MS = 30 * 60 * 1000;
+    const els = Object.fromEntries([
+      'app','planning','queueCount','totalDuration','finishTime','startQuest','queueNote',
+      'retryDurations','questList','catalog','setup','apiKey','saveKey','refresh','query',
+      'yearFrom','yearTo','sort','libraryFilter','grid','empty','errorBox','moreRow','loadMore',
+      'watchArea','playerProgress','playerTitle','playerMeta','playerMessage','resumeQuest',
+      'retryPlayer','cooldown','lockTitle','lockRemaining','unlockTime'
+    ].map(id => [id, document.getElementById(id)]));
     let allVideos = [];
     let visibleLimit = PAGE_SIZE;
     let loading = false;
-    let activeVideoId = '';
     let autoFetchTimer = 0;
     let lastCacheSavedAt = '';
     let archiveComplete = false;
     let archiveNextPageToken = '';
     let state = loadState();
-    let randomPlaybackEnabled = false;
-    let focusModeEnabled = false;
-
-    window.addEventListener('message', event => {
-      if (event.origin !== 'https://www.youtube.com' || event.source !== els.playerFrame.contentWindow) return;
-      try {
-        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-        const playerState = data?.event === 'onStateChange'
-          ? Number(data.info)
-          : Number(data?.info?.playerState);
-        if (playerState === 0) handleYoutubeStateChange();
-      } catch {
-        // Ignore unrelated YouTube player messages.
-      }
-    });
+    let quest = readQuest();
+    let durationBusy = false;
+    let durationTimer = 0;
+    const durationErrors = new Map();
+    let player = null;
+    let playerReady = false;
+    let playerAPI = null;
+    let loadingPlayer = false;
+    let sampleTime = 0;
+    let samplePosition = 0;
+    let hasPlayed = false;
+    let handledEnd = false;
+    let lastProgressSave = 0;
 
     function loadState() {
       try {
         const saved = JSON.parse(localStorage.getItem(STATE_KEY) || '{}');
-        return {
-          favorites: new Set(saved.favorites || []),
-          later: new Set(saved.later || []),
-          watched: new Set(saved.watched || []),
-          lastPlayed: saved.lastPlayed || ''
-        };
+        return { favorites: new Set(saved.favorites || []), later: new Set(saved.later || []), watched: new Set(saved.watched || []) };
       } catch {
-        return { favorites: new Set(), later: new Set(), watched: new Set(), lastPlayed: '' };
+        return { favorites: new Set(), later: new Set(), watched: new Set() };
       }
     }
-
     function saveState() {
-      localStorage.setItem(STATE_KEY, JSON.stringify({
-        favorites: [...state.favorites],
-        later: [...state.later],
-        watched: [...state.watched],
-        lastPlayed: state.lastPlayed
-      }));
+      try {
+        localStorage.setItem(STATE_KEY, JSON.stringify({
+          favorites: [...state.favorites], later: [...state.later], watched: [...state.watched]
+        }));
+      } catch { showError('視聴状態を保存できません。ブラウザの保存容量を確認してください。'); }
     }
-
+    function emptyQuest() {
+      return { phase: 'planning', items: [], index: 0, checkpoint: 0, lockedUntil: 0 };
+    }
+    function readQuest() {
+      try {
+        const data = JSON.parse(localStorage.getItem(QUEST_KEY) || 'null');
+        const lock = Math.max(Number(localStorage.getItem(LOCK_KEY)) || 0, Number(data?.lockedUntil) || 0);
+        if (lock > Date.now()) return { ...emptyQuest(), phase: 'locked', lockedUntil: lock };
+        if (!data || data.phase === 'locked') return emptyQuest();
+        const items = (Array.isArray(data.items) ? data.items : [])
+          .filter(v => /^[A-Za-z0-9_-]{11}$/.test(v.id) && typeof v.title === 'string')
+          .map(v => ({ ...v, durationSeconds: Number(v.durationSeconds) > 0 ? Number(v.durationSeconds) : null }));
+        const running = data.phase === 'running' && items.length && items.every(v => v.durationSeconds > 0)
+          && Number.isInteger(data.index) && data.index >= 0 && data.index < items.length;
+        return { ...emptyQuest(), items, phase: running ? 'running' : 'planning',
+          index: running ? data.index : 0, checkpoint: running ? Math.max(0, Math.min(Number(data.checkpoint) || 0, items[data.index].durationSeconds)) : 0 };
+      } catch { return emptyQuest(); }
+    }
+    function saveQuest() {
+      try {
+        localStorage.setItem(QUEST_KEY, JSON.stringify(quest));
+        return true;
+      } catch {
+        showError('クエストを保存できません。ブラウザの保存容量を確認して再試行してください。');
+        return false;
+      }
+    }
+    function formatDuration(seconds) {
+      if (!(seconds >= 0)) return '取得中';
+      seconds = Math.round(seconds);
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor(seconds % 3600 / 60);
+      const rest = seconds % 60;
+      return hours ? hours + '時間' + minutes + '分' + rest + '秒' : minutes + '分' + rest + '秒';
+    }
+    function clockTime(timestamp) {
+      return new Intl.DateTimeFormat('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(timestamp);
+    }
+    function parseDuration(value) {
+      const match = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/.exec(value || '');
+      if (!match) return null;
+      const seconds = Number(match[1] || 0) * 86400 + Number(match[2] || 0) * 3600
+        + Number(match[3] || 0) * 60 + Number(match[4] || 0);
+      return seconds > 0 ? seconds : null;
+    }
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;' }[char]));
+    }
+    function render() {
+      if (quest.phase !== 'planning') { renderPhase(); return; }
+      const videos = filteredVideos();
+      els.grid.innerHTML = videos.slice(0, visibleLimit).map(videoCard).join('');
+      els.empty.classList.toggle('hidden', videos.length > 0);
+      els.moreRow.classList.toggle('hidden', visibleLimit >= videos.length);
+      renderQueue();
+    }
+    function videoCard(video) {
+      const order = quest.items.findIndex(v => v.id === video.id);
+      return '<article class="card ' + (order >= 0 ? 'selected' : '') + '">'
+        + '<button class="thumb-btn" type="button" data-select="' + escapeHtml(video.id) + '" aria-pressed="' + (order >= 0) + '" aria-label="' + escapeHtml(video.title) + 'を選択">'
+        + '<img src="' + escapeHtml(video.thumbnail) + '" alt="" loading="lazy">'
+        + '<span class="selection-mark">' + (order >= 0 ? order + 1 : '+') + '</span>'
+        + (video.durationSeconds ? '<span class="duration-badge">' + formatDuration(video.durationSeconds) + '</span>' : '') + '</button>'
+        + '<div class="card-body"><h2 class="title">' + escapeHtml(video.title) + '</h2>'
+        + '<div class="meta">' + formatDate(video.publishedAt) + (state.watched.has(video.id) ? ' · 視聴済み' : '') + '</div>'
+        + '<button class="selection-button" type="button" data-select="' + escapeHtml(video.id) + '">' + (order >= 0 ? '選択済み · ' + (order + 1) + '番目' : '追加する') + '</button>'
+        + '</div></article>';
+    }
+    function renderQueue() {
+      const missing = quest.items.filter(v => !(v.durationSeconds > 0));
+      const total = quest.items.reduce((sum, v) => sum + (v.durationSeconds || 0), 0);
+      els.queueCount.textContent = quest.items.length + '本';
+      els.totalDuration.textContent = missing.length ? '時間を取得中' : formatDuration(total);
+      els.finishTime.textContent = quest.items.length && !missing.length ? clockTime(Date.now() + total * 1000) : '--:--';
+      els.startQuest.disabled = !quest.items.length || missing.length > 0 || durationBusy || quest.phase !== 'planning';
+      const hasError = quest.items.some(v => durationErrors.has(v.id));
+      els.retryDurations.hidden = !hasError;
+      els.queueNote.textContent = hasError ? '動画時間を取得できません。APIキーと再生可否を確認して再取得してください。'
+        : missing.length ? '選択した動画の時間を取得しています。'
+        : quest.items.length ? '終了予定は広告・一時停止・通信待ちを含まない目安です。視聴終了後は30分ロックされます。' : '';
+      els.questList.innerHTML = quest.items.map((v, i) =>
+        '<li class="quest-row"><span>' + (i + 1) + '</span><img src="' + escapeHtml(v.thumbnail) + '" alt="">'
+        + '<div><p class="quest-row-title">' + escapeHtml(v.title) + '</p><small>' + (v.durationSeconds ? formatDuration(v.durationSeconds) : durationErrors.has(v.id) ? '取得できません' : '取得中') + '</small></div>'
+        + '<div class="quest-row-tools">'
+        + '<button class="icon-button" type="button" data-queue="up" data-id="' + v.id + '" title="前へ移動" aria-label="前へ移動"' + (!i ? ' disabled' : '') + '>↑</button>'
+        + '<button class="icon-button" type="button" data-queue="down" data-id="' + v.id + '" title="後ろへ移動" aria-label="後ろへ移動"' + (i === quest.items.length - 1 ? ' disabled' : '') + '>↓</button>'
+        + '<button class="icon-button" type="button" data-queue="remove" data-id="' + v.id + '" title="選択から削除" aria-label="選択から削除">×</button></div></li>'
+      ).join('');
+    }
+    function selectVideo(id) {
+      if (quest.phase !== 'planning') return;
+      const index = quest.items.findIndex(v => v.id === id);
+      if (index >= 0) quest.items.splice(index, 1);
+      else {
+        const video = allVideos.find(v => v.id === id && !v.isShort);
+        if (!video) return;
+        quest.items.push({ ...video });
+      }
+      saveQuest();
+      render();
+      scheduleDurations();
+    }
+    function changeQueue(id, action) {
+      if (quest.phase !== 'planning') return;
+      const index = quest.items.findIndex(v => v.id === id);
+      if (index < 0) return;
+      if (action === 'remove') quest.items.splice(index, 1);
+      else {
+        const next = action === 'up' ? index - 1 : index + 1;
+        if (next < 0 || next >= quest.items.length) return;
+        [quest.items[index], quest.items[next]] = [quest.items[next], quest.items[index]];
+      }
+      saveQuest();
+      render();
+    }
+    function scheduleDurations() {
+      window.clearTimeout(durationTimer);
+      if (quest.phase === 'planning') durationTimer = window.setTimeout(loadDurations, 200);
+    }
+    async function loadDurations() {
+      if (durationBusy || quest.phase !== 'planning') return;
+      const missing = quest.items.filter(v => !v.durationSeconds && !durationErrors.has(v.id));
+      if (!missing.length) return;
+      const key = getApiKey();
+      if (!key) {
+        missing.forEach(v => durationErrors.set(v.id, true));
+        els.setup.classList.remove('hidden');
+        renderQueue();
+        return;
+      }
+      durationBusy = true;
+      renderQueue();
+      try {
+        for (let offset = 0; offset < missing.length; offset += 50) {
+          const batch = missing.slice(offset, offset + 50);
+          const data = await apiGet('videos', { part:'contentDetails,status,snippet', id:batch.map(v => v.id).join(','), key });
+          const found = new Map((data.items || []).map(v => [v.id, v]));
+          batch.forEach(video => {
+            const details = found.get(video.id);
+            const seconds = parseDuration(details?.contentDetails?.duration);
+            const usable = seconds && details?.status?.embeddable !== false
+              && details?.snippet?.liveBroadcastContent !== 'live' && details?.snippet?.liveBroadcastContent !== 'upcoming';
+            if (!usable) { durationErrors.set(video.id, true); return; }
+            [allVideos, quest.items].forEach(list => {
+              const item = list.find(v => v.id === video.id);
+              if (item) item.durationSeconds = seconds;
+            });
+          });
+          saveVideoCache(false);
+          saveQuest();
+        }
+      } catch (error) {
+        missing.filter(v => !v.durationSeconds).forEach(v => durationErrors.set(v.id, true));
+        showError('動画時間を取得できません: ' + error.message);
+      } finally {
+        durationBusy = false;
+        render();
+        if (quest.items.some(v => !v.durationSeconds && !durationErrors.has(v.id))) scheduleDurations();
+      }
+    }
+    function renderPhase() {
+      const locked = quest.phase === 'locked' && quest.lockedUntil > Date.now();
+      document.body.classList.toggle('site-locked', locked);
+      els.cooldown.hidden = !locked;
+      els.app.inert = locked;
+      els.planning.hidden = quest.phase !== 'planning';
+      els.catalog.hidden = quest.phase !== 'planning';
+      els.watchArea.hidden = quest.phase !== 'running';
+      if (locked) {
+        const seconds = Math.max(0, Math.ceil((quest.lockedUntil - Date.now()) / 1000));
+        els.lockRemaining.textContent = String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0');
+        els.unlockTime.textContent = clockTime(quest.lockedUntil) + ' に解除';
+      }
+      if (quest.phase === 'running') {
+        const video = quest.items[quest.index];
+        els.playerProgress.textContent = (quest.index + 1) + ' / ' + quest.items.length + ' 本';
+        els.playerTitle.textContent = video.title;
+        els.playerMeta.textContent = formatDuration(video.durationSeconds);
+      }
+    }
+    function startQuest() {
+      if (quest.phase !== 'planning' || !quest.items.length || quest.items.some(v => !v.durationSeconds) || durationBusy) return;
+      quest.phase = 'running';
+      quest.index = 0;
+      quest.checkpoint = 0;
+      if (!saveQuest()) { quest.phase = 'planning'; return; }
+      showError('');
+      renderPhase();
+      els.watchArea.scrollIntoView({ behavior:'auto', block:'start' });
+      resumeQuest();
+    }
+    function loadPlayerAPI() {
+      if (window.YT?.Player) return Promise.resolve();
+      if (playerAPI) return playerAPI;
+      playerAPI = new Promise((resolve, reject) => {
+        let finished = false;
+        const timer = window.setTimeout(() => fail(), 15000);
+        function fail() {
+          if (finished) return;
+          finished = true;
+          window.clearTimeout(timer);
+          playerAPI = null;
+          reject(new Error('YouTubeプレイヤーに接続できません。再開ボタンで再試行してください。'));
+        }
+        window.onYouTubeIframeAPIReady = () => {
+          if (finished) return;
+          finished = true;
+          window.clearTimeout(timer);
+          resolve();
+        };
+        document.getElementById('youtube-api')?.remove();
+        const script = document.createElement('script');
+        script.id = 'youtube-api';
+        script.src = 'https://www.youtube.com/iframe_api';
+        script.onerror = fail;
+        document.head.appendChild(script);
+      });
+      return playerAPI;
+    }
+    async function resumeQuest() {
+      if (quest.phase !== 'running' || loadingPlayer) return;
+      if (player && !playerReady) return;
+      if (playerReady && player) {
+        player.playVideo();
+        return;
+      }
+      loadingPlayer = true;
+      els.resumeQuest.disabled = true;
+      els.playerMessage.textContent = 'プレイヤーに接続中';
+      try {
+        await loadPlayerAPI();
+        if (quest.phase !== 'running') return;
+        const origin = /^https?:$/.test(location.protocol) ? location.origin : undefined;
+        player = new window.YT.Player('playerMount', {
+          width: '100%', height: '100%',
+          playerVars: { playsinline: 1, autoplay: 1, rel: 0, origin },
+          events: {
+            onReady: event => {
+              if (quest.phase !== 'running') { event.target.destroy(); return; }
+              playerReady = true;
+              const frame = event.target.getIframe();
+              frame.classList.add('player-frame');
+              frame.setAttribute('title', 'YouTube クエスト再生');
+              frame.setAttribute('allow', 'autoplay; encrypted-media; fullscreen; picture-in-picture');
+              frame.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+              loadCurrentVideo();
+            },
+            onStateChange: onPlayerState,
+            onError: () => {
+              hasPlayed = false;
+              els.playerMessage.textContent = 'この動画を再生できません。同じ動画を再読み込みできます。';
+              els.retryPlayer.hidden = false;
+              els.resumeQuest.hidden = true;
+            },
+            onAutoplayBlocked: () => {
+              els.playerMessage.textContent = '自動再生が制限されました。再生を再開してください。';
+              els.resumeQuest.hidden = false;
+            }
+          }
+        });
+      } catch (error) {
+        els.playerMessage.textContent = error.message;
+      } finally {
+        loadingPlayer = false;
+        els.resumeQuest.disabled = false;
+      }
+    }
+    function currentVideoMatches() {
+      return quest.phase === 'running' && playerReady && player?.getVideoData?.().video_id === quest.items[quest.index].id;
+    }
+    function loadCurrentVideo() {
+      if (!playerReady || quest.phase !== 'running') return;
+      hasPlayed = false;
+      handledEnd = false;
+      sampleTime = Date.now();
+      samplePosition = quest.checkpoint;
+      els.retryPlayer.hidden = true;
+      els.resumeQuest.hidden = false;
+      els.playerMessage.textContent = '';
+      renderPhase();
+      player.loadVideoById({ videoId: quest.items[quest.index].id, startSeconds: Math.max(0, quest.checkpoint - 1) });
+    }
+    function onPlayerState(event) {
+      if (!currentVideoMatches()) return;
+      if (event.data === 1) {
+        hasPlayed = true;
+        sampleTime = Date.now();
+        samplePosition = player.getCurrentTime();
+        els.playerMessage.textContent = '';
+        els.resumeQuest.hidden = true;
+        els.retryPlayer.hidden = true;
+        if (samplePosition > quest.checkpoint + 3) player.seekTo(quest.checkpoint, true);
+      } else if (event.data === 0) {
+        finishCurrentVideo();
+      } else if (event.data === 2) {
+        els.resumeQuest.hidden = false;
+      }
+    }
+    // Only continuous playback extends the saved position; a forward seek cannot complete a video.
+    function recordProgress(ended = false) {
+      if (!hasPlayed || !currentVideoMatches()) return;
+      const now = Date.now();
+      const position = Number(player.getCurrentTime());
+      const elapsed = Math.min(3, Math.max(0, (now - sampleTime) / 1000));
+      const rate = Number(player.getPlaybackRate?.()) || 1;
+      const allowance = elapsed * rate + 1.5;
+      if (Number.isFinite(position) && position <= quest.checkpoint + allowance
+          && position - samplePosition <= allowance && (player.getPlayerState() === 1 || ended)) {
+        quest.checkpoint = Math.max(quest.checkpoint, position);
+      } else if (Number.isFinite(position) && position > quest.checkpoint + allowance) {
+        player.seekTo(quest.checkpoint, true);
+      }
+      sampleTime = now;
+      samplePosition = position;
+      if (now - lastProgressSave >= 4000) { saveQuest(); lastProgressSave = now; }
+    }
+    function finishCurrentVideo() {
+      if (handledEnd || !hasPlayed || !currentVideoMatches()) return;
+      recordProgress(true);
+      const actualDuration = Number(player.getDuration()) || quest.items[quest.index].durationSeconds;
+      const tolerance = Math.min(2, actualDuration * .02);
+      if (quest.checkpoint < actualDuration - tolerance) {
+        els.playerMessage.textContent = '未視聴の位置から再開します。';
+        player.seekTo(quest.checkpoint, true);
+        player.playVideo();
+        return;
+      }
+      handledEnd = true;
+      state.watched.add(quest.items[quest.index].id);
+      saveState();
+      if (quest.index + 1 < quest.items.length) {
+        quest.index += 1;
+        quest.checkpoint = 0;
+        saveQuest();
+        loadCurrentVideo();
+      } else {
+        beginCooldown();
+      }
+    }
+    function destroyPlayer() {
+      if (player) { try { player.destroy(); } catch {} }
+      player = null;
+      playerReady = false;
+      hasPlayed = false;
+      handledEnd = false;
+      if (!document.getElementById('playerMount')) {
+        const mount = document.createElement('div');
+        mount.id = 'playerMount';
+        els.watchArea.querySelector('.player-panel').appendChild(mount);
+      }
+    }
+    function beginCooldown() {
+      if (quest.phase !== 'running') return;
+      quest = { ...emptyQuest(), phase:'locked', lockedUntil: Date.now() + COOLDOWN_MS };
+      try { localStorage.setItem(LOCK_KEY, String(quest.lockedUntil)); } catch {}
+      saveQuest();
+      destroyPlayer();
+      showError('');
+      renderPhase();
+      els.lockTitle.focus();
+    }
+    function tick() {
+      if (quest.phase === 'locked') {
+        if (Date.now() >= quest.lockedUntil) {
+          quest = emptyQuest();
+          saveQuest();
+          try { localStorage.removeItem(LOCK_KEY); } catch {}
+          renderPhase();
+          render();
+          els.startQuest.focus();
+          scheduleAutoFetch();
+        } else renderPhase();
+      } else if (quest.phase === 'running') {
+        if (playerReady && player?.getPlayerState?.() === 1) {
+          if (!currentVideoMatches()) loadCurrentVideo();
+          else recordProgress();
+        }
+      } else if (quest.items.length) {
+        renderQueue();
+      }
+    }
     function clearLegacyCaches() {
       LEGACY_CACHE_KEYS.forEach(key => localStorage.removeItem(key));
     }
@@ -1058,6 +1407,7 @@
     }
 
     async function fetchVideos() {
+      if (loading || quest.phase !== 'planning') return;
       const apiKey = getApiKey();
       if (!apiKey) {
         els.setup.classList.remove('hidden');
@@ -1132,7 +1482,6 @@
             populateYears();
             render();
             els.setup.classList.add('hidden');
-            if (!activeVideoId) randomVideo();
           }
 
           pageToken = nextPageToken;
@@ -1144,7 +1493,6 @@
         saveVideoCache(false);
         populateYears();
         render();
-        if (!activeVideoId) randomVideo();
       } catch (error) {
         showError(`取得に失敗しました: ${error.message}`);
       } finally {
@@ -1159,6 +1507,7 @@
         title: String(video.title || '無題'),
         description: description.slice(0, CACHE_DESCRIPTION_LIMIT),
         publishedAt: video.publishedAt,
+        durationSeconds: Number(video.durationSeconds) > 0 ? Number(video.durationSeconds) : null,
         year: video.year || new Date(video.publishedAt).getUTCFullYear(),
         thumbnail: video.thumbnail || `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`,
         isShort: Boolean(video.isShort) || inferShort(video)
@@ -1246,333 +1595,77 @@
       return hash;
     }
 
-    function render() {
-      const videos = filteredVideos();
-      const rendered = videos.slice(0, visibleLimit);
-      els.empty.classList.toggle('hidden', rendered.length > 0);
-      els.moreRow.classList.toggle('hidden', rendered.length >= videos.length);
-
-      els.grid.innerHTML = rendered.map(video => videoCard(video)).join('');
-      updatePlayerButtons();
-      renderRail();
-    }
-
-    function videoCard(video) {
-      const isFavorite = state.favorites.has(video.id);
-      const isLater = state.later.has(video.id);
-      const isWatched = state.watched.has(video.id);
-      const isActive = activeVideoId === video.id;
-      return `
-        <article class="card ${isActive ? 'active' : ''}">
-          <button class="thumb-btn" type="button" data-action="play" data-id="${video.id}" aria-label="${escapeAttr(video.title)}を再生">
-            <img src="${escapeAttr(video.thumbnail)}" alt="" loading="lazy">
-            ${isWatched ? '<span class="watch-mark">視聴済み</span>' : ''}
-            <span class="play-badge" aria-hidden="true">${icons.play}</span>
-          </button>
-          <div class="card-body">
-            <h2 class="title">${escapeHtml(video.title)}</h2>
-            <div class="meta">
-              <span>${formatDate(video.publishedAt)}</span>
-            </div>
-            <p class="description">${escapeHtml(video.description || '説明文なし')}</p>
-            <div class="card-actions">
-              <button class="icon-button" type="button" data-action="play" data-id="${video.id}" title="再生" aria-label="再生">${icons.play}</button>
-              <button class="icon-button ${isFavorite ? 'active' : ''}" type="button" data-action="favorite" data-id="${video.id}" title="お気に入り" aria-label="お気に入り">${icons.heart}</button>
-              <button class="icon-button ${isLater ? 'active' : ''}" type="button" data-action="later" data-id="${video.id}" title="あとで見る" aria-label="あとで見る">${icons.later}</button>
-              <button class="icon-button ${isWatched ? 'active' : ''}" type="button" data-action="watched" data-id="${video.id}" title="視聴済み" aria-label="視聴済み">${icons.check}</button>
-              <a class="icon-link" href="https://www.youtube.com/watch?v=${video.id}" target="_blank" rel="noreferrer" title="YouTubeで開く" aria-label="YouTubeで開く">${icons.external}</a>
-            </div>
-          </div>
-        </article>
-      `;
-    }
-
-    function renderRail() {
-      if (!activeVideoId) return;
-      const candidates = filteredVideos().filter(video => video.id !== activeVideoId);
-      const videos = shuffleVideos(candidates).slice(0, 18);
-      els.rail.innerHTML = videos.map(video => `
-        <button class="rail-item" type="button" data-action="play" data-id="${video.id}">
-          <span class="rail-thumb"><img src="${escapeAttr(video.thumbnail)}" alt="" loading="lazy"></span>
-          <span class="rail-info">
-            <span class="rail-name">${escapeHtml(video.title)}</span>
-            <span class="rail-date">${formatDate(video.publishedAt)}</span>
-          </span>
-        </button>
-      `).join('');
-    }
-
-    function shuffleVideos(videos) {
-      const shuffled = [...videos];
-      for (let index = shuffled.length - 1; index > 0; index -= 1) {
-        const swapIndex = randomIndex(index + 1);
-        [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
-      }
-      return shuffled;
-    }
-
-    function randomIndex(length) {
-      const secureCrypto = window.crypto || window.msCrypto;
-      return secureCrypto?.getRandomValues
-        ? secureCrypto.getRandomValues(new Uint32Array(1))[0] % length
-        : Math.floor(Math.random() * length);
-    }
-
-    function escapeHtml(value) {
-      return String(value).replace(/[&<>"']/g, char => ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#039;'
-      }[char]));
-    }
-
-    function escapeAttr(value) {
-      return escapeHtml(value).replace(/`/g, '&#096;');
-    }
-
-    function randomVideo() {
-      randomPlaybackEnabled = true;
-      const currentId = activeVideoId;
-      const pool = filteredVideos().filter(video => video.id !== currentId);
-      const source = pool.length
-        ? pool
-        : availableVideos().filter(video => video.id !== currentId);
-      if (!source.length) {
-        randomPlaybackEnabled = false;
-        showError('動画を取得してからランダム再生できます。');
-        return;
-      }
-      play(source[randomIndex(source.length)].id, true);
-    }
-
-    function loadVideoIntoPlayer(videoId) {
-      const origin = /^https?:$/.test(window.location.protocol)
-        ? `&origin=${encodeURIComponent(window.location.origin)}`
-        : '';
-      els.playerFrame.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&enablejsapi=1&rel=0${origin}`;
-    }
-
-    function subscribeToPlayerEvents() {
-      const target = els.playerFrame.contentWindow;
-      if (!target) return;
-      const base = { id: 'playerFrame', channel: 'widget' };
-      target.postMessage(JSON.stringify({ ...base, event: 'listening' }), 'https://www.youtube.com');
-      target.postMessage(JSON.stringify({ ...base, event: 'command', func: 'addEventListener', args: ['onStateChange'] }), 'https://www.youtube.com');
-    }
-
-    function handleYoutubeStateChange() {
-      if (!randomPlaybackEnabled || !activeVideoId) return;
-      window.setTimeout(() => {
-        if (randomPlaybackEnabled && activeVideoId) randomVideo();
-      }, 250);
-    }
-
-    function play(videoId, keepRandomPlayback = false) {
-      const video = allVideos.find(item => item.id === videoId);
-      if (!video) return;
-      if (activeVideoId === videoId) return;
-      if (!keepRandomPlayback) randomPlaybackEnabled = false;
-      const wasPlaying = Boolean(activeVideoId);
-      activeVideoId = videoId;
-      state.lastPlayed = videoId;
-      state.watched.add(videoId);
-      saveState();
-      els.playerTitle.textContent = video.title;
-      els.playerMeta.textContent = formatDate(video.publishedAt);
-      loadVideoIntoPlayer(videoId);
-      els.playerYoutubeLink.href = `https://www.youtube.com/watch?v=${videoId}`;
-      els.watchArea.classList.remove('hidden');
-      updatePlayerButtons();
-      renderRail();
-      if (!wasPlaying) {
-        requestAnimationFrame(() => els.watchArea.scrollIntoView({ behavior: 'auto', block: 'start' }));
-      }
-    }
-
-    function closePlayer() {
-      randomPlaybackEnabled = false;
-      setFocusMode(false);
-      els.playerFrame.src = '';
-      els.watchArea.classList.add('hidden');
-      activeVideoId = '';
-      render();
-    }
-
-    function toggleSet(setName, videoId) {
-      const target = state[setName];
-      if (target.has(videoId)) target.delete(videoId);
-      else target.add(videoId);
-      saveState();
-      render();
-    }
-
-    function updatePlayerButtons() {
-      if (!activeVideoId) return;
-      els.playerFavorite.innerHTML = icons.heart;
-      els.playerLater.innerHTML = icons.later;
-      els.playerWatched.innerHTML = icons.check;
-      updateFocusButton();
-      els.playerRandom.innerHTML = icons.shuffle;
-      els.closePlayer.innerHTML = icons.close;
-      els.playerYoutubeLink.innerHTML = icons.external;
-      els.playerFavorite.classList.toggle('active', state.favorites.has(activeVideoId));
-      els.playerLater.classList.toggle('active', state.later.has(activeVideoId));
-      els.playerWatched.classList.toggle('active', state.watched.has(activeVideoId));
-    }
-
-    function setFocusMode(enabled) {
-      focusModeEnabled = Boolean(enabled && activeVideoId);
-      document.body.classList.toggle('focus-mode', focusModeEnabled);
-      updateFocusButton();
-      if (focusModeEnabled) window.scrollTo({ top: 0, behavior: 'auto' });
-    }
-
-    function updateFocusButton() {
-      els.playerFocus.innerHTML = focusModeEnabled ? icons.focusExit : icons.focus;
-      els.playerFocus.classList.toggle('active', focusModeEnabled);
-      els.playerFocus.setAttribute('aria-pressed', String(focusModeEnabled));
-      els.playerFocus.title = focusModeEnabled ? '集中モードを終了' : '集中モード';
-      els.playerFocus.setAttribute('aria-label', els.playerFocus.title);
-    }
-
-    function shouldAutoFetch() {
-      if (!getApiKey() || loading) return false;
-      if (!allVideos.length) return true;
-      if (!archiveComplete) return true;
-      if (newestAvailableYear() <= 2022) return true;
-      if (!lastCacheSavedAt) return false;
-      const savedTime = new Date(lastCacheSavedAt).getTime();
-      if (!Number.isFinite(savedTime)) return false;
-      return Date.now() - savedTime > AUTO_REFRESH_MS;
-    }
-
-    function newestAvailableYear() {
-      const years = availableVideos().map(video => video.year).filter(Boolean);
-      return years.length ? Math.max(...years) : 0;
-    }
-
-    function scheduleAutoFetch(delay = 500) {
-      window.clearTimeout(autoFetchTimer);
-      if (!getApiKey()) return;
-      autoFetchTimer = window.setTimeout(() => {
-        if (shouldAutoFetch()) fetchVideos();
-      }, delay);
-    }
-
-    function ensureVideosAvailable(delay = 300) {
-      if (!allVideos.length) {
-        scheduleAutoFetch(delay);
-      }
-    }
 
     function restoreCache() {
-      clearLegacyCaches();
-      const savedKey = localStorage.getItem(STORAGE_KEY);
-      if (savedKey) {
-        els.apiKey.value = savedKey;
-        els.setup.classList.add('hidden');
-      }
-      const cached = localStorage.getItem(CACHE_KEY);
-      if (!cached) {
-        populateYears();
-        render();
-        scheduleAutoFetch(500);
-        return;
-      }
       try {
-        const data = JSON.parse(cached);
-        if (!Array.isArray(data.videos)) {
-          scheduleAutoFetch(500);
-          return;
+        clearLegacyCaches();
+        const key = localStorage.getItem(STORAGE_KEY);
+        if (key) { els.apiKey.value = key; els.setup.classList.add('hidden'); }
+        const data = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+        if (Array.isArray(data?.videos)) {
+          lastCacheSavedAt = data.savedAt || '';
+          archiveComplete = Boolean(data.archiveComplete);
+          archiveNextPageToken = archiveComplete ? '' : String(data.nextPageToken || '');
+          allVideos = data.videos.filter(v => new Date(v.publishedAt) >= MIN_DATE).map(normalizeVideo);
         }
-        lastCacheSavedAt = data.savedAt || '';
-        archiveComplete = Boolean(data.archiveComplete);
-        archiveNextPageToken = archiveComplete ? '' : String(data.nextPageToken || '');
-        allVideos = data.videos
-          .filter(video => new Date(video.publishedAt) >= MIN_DATE)
-          .map(normalizeVideo);
-        saveVideoCache(false);
-        populateYears();
-        render();
-        scheduleAutoFetch(900);
-        if (allVideos.length && !activeVideoId) randomVideo();
-      } catch {
-        localStorage.removeItem(CACHE_KEY);
-        scheduleAutoFetch(500);
-      }
+      } catch { showError('保存データの一部を読み込めませんでした。'); }
+      populateYears();
+      renderPhase();
+      render();
+      if (quest.phase === 'planning') { scheduleAutoFetch(); scheduleDurations(); }
     }
-
-    function handleVideoAction(event) {
-      const target = event.target.closest('[data-action]');
-      if (!target) return;
-      const action = target.dataset.action;
-      const id = target.dataset.id;
-      if (action === 'play' && id) play(id);
-      if (action === 'favorite' && id) toggleSet('favorites', id);
-      if (action === 'later' && id) toggleSet('later', id);
-      if (action === 'watched' && id) toggleSet('watched', id);
+    function shouldAutoFetch() {
+      return quest.phase === 'planning' && !loading && Boolean(getApiKey())
+        && (!allVideos.length || !archiveComplete || !lastCacheSavedAt || Date.now() - new Date(lastCacheSavedAt).getTime() > AUTO_REFRESH_MS);
     }
-
+    function scheduleAutoFetch(delay = 500) {
+      window.clearTimeout(autoFetchTimer);
+      if (shouldAutoFetch()) autoFetchTimer = window.setTimeout(fetchVideos, delay);
+    }
+    els.grid.addEventListener('click', event => {
+      const target = event.target.closest('[data-select]');
+      if (target) selectVideo(target.dataset.select);
+    });
+    els.questList.addEventListener('click', event => {
+      const target = event.target.closest('[data-queue]');
+      if (target) changeQueue(target.dataset.id, target.dataset.queue);
+    });
+    els.startQuest.addEventListener('click', startQuest);
+    els.resumeQuest.addEventListener('click', resumeQuest);
+    els.retryPlayer.addEventListener('click', () => {
+      if (quest.phase !== 'running') return;
+      destroyPlayer();
+      resumeQuest();
+    });
+    els.retryDurations.addEventListener('click', () => { durationErrors.clear(); loadDurations(); });
     els.saveKey.addEventListener('click', () => {
       saveApiKey();
+      durationErrors.clear();
+      loadDurations();
       fetchVideos();
     });
     els.refresh.addEventListener('click', fetchVideos);
-    els.randomPlay.addEventListener('click', randomVideo);
-    els.playerRandom.addEventListener('click', randomVideo);
-    els.playerFocus.addEventListener('click', () => setFocusMode(!focusModeEnabled));
-    els.playerFavorite.addEventListener('click', () => activeVideoId && toggleSet('favorites', activeVideoId));
-    els.playerLater.addEventListener('click', () => activeVideoId && toggleSet('later', activeVideoId));
-    els.playerWatched.addEventListener('click', () => activeVideoId && toggleSet('watched', activeVideoId));
-    els.query.addEventListener('input', () => {
-      visibleLimit = PAGE_SIZE;
-      ensureVideosAvailable(250);
-      render();
+    [els.query, els.yearFrom, els.yearTo, els.sort, els.libraryFilter].forEach(el => {
+      el.addEventListener(el === els.query ? 'input' : 'change', () => { visibleLimit = PAGE_SIZE; render(); });
     });
-    els.yearFrom.addEventListener('change', () => {
-      visibleLimit = PAGE_SIZE;
-      ensureVideosAvailable(250);
-      render();
-    });
-    els.yearTo.addEventListener('change', () => {
-      visibleLimit = PAGE_SIZE;
-      ensureVideosAvailable(250);
-      render();
-    });
-    els.sort.addEventListener('change', () => {
-      visibleLimit = PAGE_SIZE;
-      ensureVideosAvailable(250);
-      render();
-    });
-    els.libraryFilter.addEventListener('change', () => {
-      visibleLimit = PAGE_SIZE;
-      ensureVideosAvailable(250);
-      render();
-    });
-    els.loadMore.addEventListener('click', () => {
-      visibleLimit += PAGE_SIZE;
-      render();
-    });
-    els.grid.addEventListener('click', handleVideoAction);
-    els.rail.addEventListener('click', handleVideoAction);
-    els.playerFrame.addEventListener('load', subscribeToPlayerEvents);
-    els.closePlayer.addEventListener('click', closePlayer);
-    document.addEventListener('keydown', event => {
-      if (event.key === 'Escape' && focusModeEnabled) setFocusMode(false);
-    });
-    els.apiKey.addEventListener('keydown', event => {
-      if (event.key === 'Enter' && !loading) {
-        saveApiKey();
-        fetchVideos();
+    els.loadMore.addEventListener('click', () => { visibleLimit += PAGE_SIZE; render(); });
+    window.addEventListener('pagehide', () => { if (quest.phase === 'running') { recordProgress(); saveQuest(); } });
+    window.addEventListener('storage', event => {
+      if (event.key !== QUEST_KEY && event.key !== LOCK_KEY) return;
+      const next = readQuest();
+      if (next.phase === 'locked' || (quest.phase === 'planning' && next.phase === 'running')) {
+        quest = next;
+        destroyPlayer();
+        renderPhase();
+      } else if (next.phase === 'planning' && quest.phase === 'planning') {
+        quest = next;
+        render();
       }
     });
-
-    updatePlayerButtons();
-    updateFocusButton();
-    populateYears();
+    document.addEventListener('visibilitychange', tick);
     restoreCache();
+    window.setInterval(tick, 1000);
+
   </script>
 </body>
 </html>
