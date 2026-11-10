@@ -3,6 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#123b73">
+  <meta name="application-name" content="Fischer's Quest">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/app-192.png">
+  <link rel="apple-touch-icon" href="./icons/app-192.png">
   <title>Fischer's Quest</title>
   <style>
     :root {
@@ -828,6 +833,7 @@
         <div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg></div>
         <div><h1>Fischer's Quest</h1></div>
       </div>
+      <button class="button secondary" id="installApp" type="button" hidden>アプリをインストール</button>
     </header>
     <section class="quest-summary" id="planning" aria-labelledby="questHeading">
       <h2 class="quest-heading" id="questHeading">今回の動画</h2>
@@ -1671,5 +1677,6 @@
     window.setInterval(tick, 1000);
 
   </script>
+  <script src="./pwa.js" defer></script>
 </body>
 </html>

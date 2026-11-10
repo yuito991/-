@@ -18,9 +18,17 @@ Fischer's-フィッシャーズ- の2016年以降の動画を選び、選択順�
 
 GitHub Pagesではリポジトリ直下の `index.html` を公開してください。
 
-このフォルダの `index.html` と `outputs/github-pages-site/index.html` は同じ内容です。外部のローカルJSファイルを追加せず、`index.html`単体をアップロードできます。YouTubeプレイヤーの利用にはネット接続が必要です。
+このフォルダの `index.html` と `outputs/github-pages-site/index.html` は同じ内容です。アプリのインストール対応を含めて公開するときは、`manifest.webmanifest`、`pwa.js`、`sw.js`、`offline.html`、`icons/` も同じ場所へアップロードしてください。YouTubeプレイヤーの利用にはネット接続が必要です。サイト本体と動画・API応答はService Workerへキャッシュせず、通信不可時だけ専用の接続エラー画面を表示します。
 
 スマホでは公開URLをSafariまたはChromeで開き、ホーム画面に追加するとアプリ風に使えます。
+
+## Androidで独立したアプリとして使う
+
+Chromeで公開URLを開き、「アプリをインストール」ボタン、またはChromeメニューのインストール項目から追加します。単なるホーム画面ショートカットではなく、WebAPKとして登録される方式を想定しています。Androidの「設定 → アプリ」に「Fischer's Quest」が表示されることを確認してください。
+
+次に「設定 → Digital Wellbeingと保護者による使用制限 → フォーカスモード」で「Fischer's Quest」を選択します。メニュー名・対象アプリ一覧は端末メーカーやAndroidのバージョンに依存します。WebAPKとして登録されても、すべての端末でフォーカスモードの対象になることを保証するものではありません。一覧に出ない端末では、独立したパッケージIDを持つAndroid APK版が別途必要です。Android実機でのインストールとフォーカスモード連携は未検証です。
+
+既に追加したブラウザのショートカットはアプリ登録と異なる場合があります。インストール後もサイトの公開範囲は変わりません。動画の選択・進捗・APIキーは同じChromeのサイトデータを利用しますが、端末やプロファイルの違いによって再入力が必要な場合があります。
 
 ## APIキー
 
@@ -33,3 +41,5 @@ YouTube Data APIキーはブラウザの `localStorage` に保存されます。
 `node tests/candidates.test.cjs` で5本抽選・期間と検索条件・選択済み除外・候補の安定性・候補切れを検証します。
 
 `tests/quest.browser.js` はPlaywright CLIの `run-code --filename` 用です。ローカルの `http://127.0.0.1:8876` でHTMLを配信して実行します。テスト用APIと模擬プレイヤーを使用し、実際のAPIキーやYouTube動画は消費しません。
+
+`node tests/serve.cjs` でローカル検証用のサーバーを起動できます。`tests/pwa.browser.js` はChromeのインストール条件、プロジェクト配下のスコープ、アイコン寸法、インストールUI、オフライン画面と復帰を検証します。
