@@ -24,6 +24,8 @@ GitHub Pagesではリポジトリ直下の `index.html` を公開してくださ
 
 ## Androidで独立したアプリとして使う
 
+OPPO等でWebAPKを許可対象にしても起動できない場合は、[Android APK版](android/README.md)を使います。アプリ名は `Fischer Quest`、アプリIDは `io.github.yuito991.fischerquest` です。Chromeとは別のアプリとしてAndroid標準WebViewで動作します。既存のWebAPKからAPIキー・視聴履歴は引き継がれないため、初回に入力し直してください。
+
 Chromeで公開URLを開き、「アプリをインストール」ボタン、またはChromeメニューのインストール項目から追加します。単なるホーム画面ショートカットではなく、WebAPKとして登録される方式を想定しています。Androidの「設定 → アプリ」に「Fischer's Quest」が表示されることを確認してください。
 
 次に「設定 → Digital Wellbeingと保護者による使用制限 → フォーカスモード」で「Fischer's Quest」を選択します。メニュー名・対象アプリ一覧は端末メーカーやAndroidのバージョンに依存します。WebAPKとして登録されても、すべての端末でフォーカスモードの対象になることを保証するものではありません。一覧に出ない端末では、独立したパッケージIDを持つAndroid APK版が別途必要です。Android実機でのインストールとフォーカスモード連携は未検証です。

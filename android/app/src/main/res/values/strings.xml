@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Fischer Quest</string>
+    <string name="connection_error">接続できません。通信状態を確認して再試行してください。</string>
+    <string name="retry">再試行</string>
+    <string name="open_external">外部サイトを開く</string>
+    <string name="external_message">このリンクを別のアプリで開きます。</string>
+    <string name="open">開く</string>
+    <string name="cancel">キャンセル</string>
+    <string name="external_unavailable">このリンクを開けるアプリがありません。</string>
+</resources>
