@@ -28,6 +28,7 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.window.OnBackInvokedDispatcher;
 
 public final class MainActivity extends Activity {
     private static final String SITE_URL = "https://yuito991.github.io/-/?native=android";
@@ -77,6 +78,10 @@ public final class MainActivity extends Activity {
         root.addView(progress, new FrameLayout.LayoutParams(-1, dp(3), Gravity.TOP));
         createErrorPanel();
         setContentView(root);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                    OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::handleBackAction);
+        }
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -179,10 +184,16 @@ public final class MainActivity extends Activity {
         if (callback != null) callback.onCustomViewHidden();
     }
 
+    // Android 13+ uses OnBackInvokedDispatcher; this callback supports older devices.
+    @SuppressLint("GestureBackNavigation")
     @Override
     public void onBackPressed() {
+        handleBackAction();
+    }
+
+    private void handleBackAction() {
         if (fullscreenView != null) hideFullscreen();
-        else super.onBackPressed();
+        else finish();
     }
 
     @Override
