@@ -51,6 +51,7 @@ function boot(saved = new Map()) {
 async function main() {
   const app = boot();
   app.run('allVideos=' + JSON.stringify(fixtures));
+  app.run('render()');
   app.run('selectVideo("aaaaaaaaaaa"); selectVideo("bbbbbbbbbbb");');
   assert.equal(app.nodes.get('startQuest').disabled, true);
   app.run('els.apiKey.value="test-key"');
@@ -100,6 +101,7 @@ async function main() {
 
   const failed = boot();
   failed.run('allVideos=' + JSON.stringify(fixtures));
+  failed.run('render()');
   failed.run('selectVideo("aaaaaaaaaaa");els.apiKey.value="test-key";fetch=async()=>({ok:true,json:async()=>({items:[]})});');
   await failed.run('loadDurations()');
   assert.equal(failed.nodes.get('startQuest').disabled, true, 'Unavailable videos cannot start');
@@ -109,4 +111,5 @@ async function main() {
   assert.ok(app.saved.has(KEY));
   console.log('PASS: selection, duration API, midnight estimate, fixed order, reload, seek/duplicate guards, cooldown, expiry, unavailable videos');
 }
-main().catch(error => { console.error(error); process.exitCode = 1; });
+module.exports = { boot, fixtures };
+if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });

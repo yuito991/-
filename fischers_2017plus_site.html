@@ -233,7 +233,7 @@
       top: 0;
       z-index: 10;
       display: grid;
-      grid-template-columns: minmax(190px, 1.2fr) repeat(4, minmax(112px, .5fr)) auto;
+      grid-template-columns: minmax(190px, 1.2fr) repeat(3, minmax(112px, .5fr)) auto;
       gap: 9px;
       align-items: center;
       padding: 12px;
@@ -700,11 +700,7 @@
 
     @media (max-width: 1060px) {
       .toolbar {
-        grid-template-columns: minmax(210px, 1fr) repeat(4, minmax(112px, 1fr)) auto;
-      }
-
-      .toolbar .library-control {
-        grid-column: 2 / span 2;
+        grid-template-columns: minmax(210px, 1fr) repeat(3, minmax(112px, 1fr)) auto;
       }
     }
 
@@ -794,6 +790,10 @@
     .card.selected { outline: 2px solid var(--accent); }
     .duration-badge { position: absolute; right: 8px; bottom: 8px; padding: 3px 5px; border-radius: 3px; color: #fff; background: #000d; font-size: .8rem; }
     .selection-button { width: 100%; min-height: 42px; background: var(--soft); border: 1px solid var(--line); border-radius: 6px; color: var(--ink); font-weight: 700; }
+    .candidate-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 0 12px; }
+    .candidate-head h2 { margin: 0; font-size: 1rem; }
+    .candidate-head span { color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
+    .candidate-actions { display: flex; align-items: center; gap: 12px; }
     .watch-area { display: block; }
     .player-panel { border: 0; }
     .player-frame { width: 100%; min-height: 200px; aspect-ratio: 16/9; border: 0; }
@@ -869,19 +869,21 @@
         <input class="input" id="query" type="search" placeholder="タイトル・説明で検索" aria-label="動画を検索">
         <select class="select" id="yearFrom" aria-label="開始年"><option value="2016">2016年から</option></select>
         <select class="select" id="yearTo" aria-label="終了年"><option value="all">最新まで</option></select>
-        <select class="select" id="sort" aria-label="並び順">
-          <option value="new">新しい順</option><option value="old">古い順</option>
-          <option value="title">タイトル順</option><option value="unwatched">未視聴優先</option>
-        </select>
         <select class="select library-control" id="libraryFilter" aria-label="視聴状態">
           <option value="all">すべて</option><option value="unwatched">未視聴</option><option value="watched">視聴済み</option>
           <option value="favorite">お気に入り</option><option value="later">あとで見る</option>
         </select>
         <button class="button" id="refresh" type="button">更新</button>
       </section>
-      <section class="grid" id="grid" aria-label="動画一覧"></section>
+      <div class="candidate-head">
+        <h2>動画候補</h2>
+        <div class="candidate-actions">
+          <span id="candidateCount">0本</span>
+          <button class="icon-button" id="refreshCandidates" type="button" title="候補を入れ替える" aria-label="候補を入れ替える">↻</button>
+        </div>
+      </div>
+      <section class="grid" id="grid" aria-label="ランダムな動画候補"></section>
       <section class="empty hidden" id="empty">表示できる動画がありません。</section>
-      <div class="more-row hidden" id="moreRow"><button class="button secondary" id="loadMore" type="button">さらに表示</button></div>
     </div>
   </main>
   <section class="cooldown" id="cooldown" hidden role="dialog" aria-modal="true" aria-labelledby="lockTitle">
@@ -900,19 +902,21 @@
     const QUEST_KEY = 'fischersQuestV1';
     const LOCK_KEY = 'fischersQuestLockUntilV1';
     const LEGACY_CACHE_KEYS = ['fischers2017ViewerCache', 'fischers2017ViewerCacheV2', 'fischers2017ViewerCacheV3', 'fischers2017ViewerCacheV4'];
-    const PAGE_SIZE = 36;
+    const CANDIDATE_COUNT = 5;
     const CACHE_DESCRIPTION_LIMIT = 120;
     const AUTO_REFRESH_MS = 12 * 60 * 60 * 1000;
     const COOLDOWN_MS = 30 * 60 * 1000;
     const els = Object.fromEntries([
       'app','planning','queueCount','totalDuration','finishTime','startQuest','queueNote',
       'retryDurations','questList','catalog','setup','apiKey','saveKey','refresh','query',
-      'yearFrom','yearTo','sort','libraryFilter','grid','empty','errorBox','moreRow','loadMore',
+      'yearFrom','yearTo','libraryFilter','grid','empty','errorBox','candidateCount','refreshCandidates',
       'watchArea','playerProgress','playerTitle','playerMeta','playerMessage','resumeQuest',
       'retryPlayer','cooldown','lockTitle','lockRemaining','unlockTime'
     ].map(id => [id, document.getElementById(id)]));
     let allVideos = [];
-    let visibleLimit = PAGE_SIZE;
+    let candidateIds = [];
+    let candidateFilterKey = '';
+    const shownCandidateIds = new Set();
     let loading = false;
     let autoFetchTimer = 0;
     let lastCacheSavedAt = '';
@@ -996,12 +1000,40 @@
     function escapeHtml(value) {
       return String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;' }[char]));
     }
-    function render() {
+    function drawCandidates(redraw = false) {
+      const filterKey = JSON.stringify([els.query.value.trim().toLowerCase(), els.yearFrom.value, els.yearTo.value, els.libraryFilter.value]);
+      if (filterKey !== candidateFilterKey) {
+        candidateFilterKey = filterKey;
+        candidateIds = [];
+        shownCandidateIds.clear();
+      }
+      const selected = new Set(quest.items.map(v => v.id));
+      const pool = new Map(filteredVideos().filter(v => !selected.has(v.id)).map(v => [v.id, v]));
+      candidateIds = redraw ? [] : candidateIds.filter(id => pool.has(id));
+      const appendRandom = videos => {
+        for (let index = videos.length - 1; index > 0; index -= 1) {
+          const swapIndex = Math.floor(Math.random() * (index + 1));
+          [videos[index], videos[swapIndex]] = [videos[swapIndex], videos[index]];
+        }
+        for (const video of videos) {
+          if (candidateIds.length >= CANDIDATE_COUNT) break;
+          candidateIds.push(video.id);
+        }
+      };
+      const eligible = [...pool.values()].filter(v => !candidateIds.includes(v.id));
+      appendRandom(eligible.filter(v => !shownCandidateIds.has(v.id)));
+      appendRandom(eligible.filter(v => shownCandidateIds.has(v.id)));
+      candidateIds.forEach(id => shownCandidateIds.add(id));
+      return candidateIds.map(id => pool.get(id));
+    }
+    function render(redrawCandidates = false) {
       if (quest.phase !== 'planning') { renderPhase(); return; }
-      const videos = filteredVideos();
-      els.grid.innerHTML = videos.slice(0, visibleLimit).map(videoCard).join('');
+      const videos = drawCandidates(redrawCandidates);
+      els.grid.innerHTML = videos.map(videoCard).join('');
       els.empty.classList.toggle('hidden', videos.length > 0);
-      els.moreRow.classList.toggle('hidden', visibleLimit >= videos.length);
+      els.empty.textContent = filteredVideos().length ? 'この条件の動画はすべて選択済みです。' : 'この条件に合う動画がありません。';
+      els.candidateCount.textContent = videos.length + '本';
+      els.refreshCandidates.disabled = !videos.length;
       renderQueue();
     }
     function videoCard(video) {
@@ -1039,15 +1071,12 @@
     }
     function selectVideo(id) {
       if (quest.phase !== 'planning') return;
-      const index = quest.items.findIndex(v => v.id === id);
-      if (index >= 0) quest.items.splice(index, 1);
-      else {
-        const video = allVideos.find(v => v.id === id && !v.isShort);
-        if (!video) return;
-        quest.items.push({ ...video });
-      }
+      if (!candidateIds.includes(id) || quest.items.some(v => v.id === id)) return;
+      const video = allVideos.find(v => v.id === id && !v.isShort);
+      if (!video) return;
+      quest.items.push({ ...video });
       saveQuest();
-      render();
+      render(true);
       scheduleDurations();
     }
     function changeQueue(id, action) {
@@ -1478,7 +1507,6 @@
 
           if (!firstPageReady) {
             firstPageReady = true;
-            visibleLimit = PAGE_SIZE;
             populateYears();
             render();
             els.setup.classList.add('hidden');
@@ -1528,11 +1556,7 @@
       const years = allSelectableYears().sort((a, b) => b - a);
       const ascending = [...years].sort((a, b) => a - b);
       const yearOptions = ascending.length ? ascending : [2016];
-      const latestYear = Math.max(...yearOptions);
-      const previousTo = els.yearTo.value || 'all';
-      const currentTo = previousTo !== 'all' && Number(previousTo) <= 2022 && latestYear > Number(previousTo)
-        ? 'all'
-        : previousTo;
+      const currentTo = els.yearTo.value || 'all';
       els.yearFrom.innerHTML = yearOptions.map(year => `<option value="${year}">${year}年から</option>`).join('');
       els.yearTo.innerHTML = '<option value="all">最新まで</option>' + years.map(year => `<option value="${year}">${year}年まで</option>`).join('');
       els.yearFrom.value = [...els.yearFrom.options].some(option => option.value === currentFrom) ? currentFrom : String(yearOptions[0]);
@@ -1556,7 +1580,6 @@
       const yearFrom = Math.min(selectedFrom, selectedTo);
       const yearTo = Math.max(selectedFrom, selectedTo);
       const library = els.libraryFilter.value;
-      const sort = els.sort.value;
       const videos = availableVideos().filter(video => {
         const yearMatch = video.year >= yearFrom && video.year <= yearTo;
         const queryMatch = !query || `${video.title}\n${video.description}`.toLowerCase().includes(query);
@@ -1569,30 +1592,11 @@
         return yearMatch && queryMatch && libraryMatch;
       });
 
-      if (sort === 'old') {
-        videos.sort((a, b) => new Date(a.publishedAt) - new Date(b.publishedAt));
-      } else if (sort === 'title') {
-        videos.sort((a, b) => a.title.localeCompare(b.title, 'ja'));
-      } else if (sort === 'unwatched') {
-        videos.sort((a, b) => Number(state.watched.has(a.id)) - Number(state.watched.has(b.id)) || new Date(b.publishedAt) - new Date(a.publishedAt));
-      } else if (sort === 'random') {
-        videos.sort((a, b) => seededRank(a.id) - seededRank(b.id));
-      } else {
-        videos.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
-      }
       return videos;
     }
 
     function availableVideos() {
       return allVideos.filter(video => !video.isShort);
-    }
-
-    function seededRank(value) {
-      let hash = 0;
-      for (let index = 0; index < value.length; index += 1) {
-        hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
-      }
-      return hash;
     }
 
 
@@ -1645,10 +1649,10 @@
       fetchVideos();
     });
     els.refresh.addEventListener('click', fetchVideos);
-    [els.query, els.yearFrom, els.yearTo, els.sort, els.libraryFilter].forEach(el => {
-      el.addEventListener(el === els.query ? 'input' : 'change', () => { visibleLimit = PAGE_SIZE; render(); });
+    [els.query, els.yearFrom, els.yearTo, els.libraryFilter].forEach(el => {
+      el.addEventListener(el === els.query ? 'input' : 'change', () => render(true));
     });
-    els.loadMore.addEventListener('click', () => { visibleLimit += PAGE_SIZE; render(); });
+    els.refreshCandidates.addEventListener('click', () => render(true));
     window.addEventListener('pagehide', () => { if (quest.phase === 'running') { recordProgress(); saveQuest(); } });
     window.addEventListener('storage', event => {
       if (event.key !== QUEST_KEY && event.key !== LOCK_KEY) return;
