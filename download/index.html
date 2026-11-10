@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#123b73">
+  <title>Android版ダウンロード | Fischer Quest</title>
+  <link rel="icon" type="image/png" href="../icons/app-192.png">
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; color: #142033; background: #f5f9ff; }
+    * { box-sizing: border-box; }
+    main { max-width: 640px; margin: 0 auto; padding: 48px 20px; }
+    header { display: flex; gap: 16px; align-items: center; margin-bottom: 28px; }
+    header img { width: 72px; height: 72px; border-radius: 8px; }
+    h1 { margin: 0; font-size: 1.6rem; }
+    header p { margin: 5px 0 0; color: #5f6f86; }
+    p, li { line-height: 1.7; }
+    .download { display: block; padding: 16px 18px; border-radius: 6px; color: white; background: #2563eb; text-align: center; font-weight: 700; text-decoration: none; }
+    .meta { color: #5f6f86; font-size: .85rem; }
+    section { margin-top: 28px; padding-top: 18px; border-top: 1px solid #d8e6f7; }
+    h2 { font-size: 1.1rem; margin: 0 0 12px; }
+    ol { padding-left: 24px; }
+    li { margin-bottom: 12px; }
+    a { color: #2563eb; }
+    a:focus-visible { outline: 3px solid #0ea5e9; outline-offset: 4px; }
+    code { overflow-wrap: anywhere; }
+    @media (prefers-color-scheme: dark) {
+      :root { color: #e6eefb; background: #0b1220; }
+      header p, .meta { color: #aab9cf; }
+      a { color: #7dd3fc; }
+      section { border-color: #273b58; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <img src="../icons/app-192.png" alt="">
+      <div><h1>Fischer Quest</h1><p>Android版 · 1.0</p></div>
+    </header>
+    <a class="download" href="./Fischer-Quest-Android.apk" download="Fischer-Quest-Android.apk">Android版APKをダウンロード</a>
+    <p class="meta">Android 8.0以降 · 約19KB · GitHubへのログイン不要</p>
+    <section>
+      <h2>インストール</h2>
+      <ol>
+        <li>ダウンロードした <code>Fischer-Quest-Android.apk</code> を開き、Androidの確認画面に従ってインストールします。</li>
+        <li>OPPOの利用制限の設定で、新しく追加された <strong>Fischer Quest</strong> を許可します。以前の <strong>Fischer's Quest</strong> とは別アプリです。</li>
+        <li>アプリを開き、初回だけYouTube Data APIキーを入力します。</li>
+      </ol>
+      <p class="meta">OPPO実機での利用制限モードとの動作は未確認です。</p>
+    </section>
+    <section>
+      <p class="meta">アプリID：<code>io.github.yuito991.fischerquest</code><br>このAPKはビルド・静的チェック・署名検証済みです。</p>
+      <p><a href="./SHA256SUMS.txt">ファイルのSHA-256</a> · <a href="../">Web版へ戻る</a></p>
+    </section>
+  </main>
+</body>
+</html>

@@ -24,7 +24,7 @@ GitHub Pagesではリポジトリ直下の `index.html` を公開してくださ
 
 ## Androidで独立したアプリとして使う
 
-OPPO等でWebAPKを許可対象にしても起動できない場合は、[Android APK版](android/README.md)を使います。アプリ名は `Fischer Quest`、アプリIDは `io.github.yuito991.fischerquest` です。Chromeとは別のアプリとしてAndroid標準WebViewで動作します。既存のWebAPKからAPIキー・視聴履歴は引き継がれないため、初回に入力し直してください。
+OPPO等でWebAPKを許可対象にしても起動できない場合は、[Android APK版ダウンロード](https://yuito991.github.io/-/download/)を使います。GitHubへのログインやZIPの展開なしでAPKを取得できます。アプリ名は `Fischer Quest`、アプリIDは `io.github.yuito991.fischerquest` です。Chromeとは別のアプリとしてAndroid標準WebViewで動作します。既存のWebAPKからAPIキー・視聴履歴は引き継がれないため、初回に入力し直してください。ビルドについては[Android版の説明](android/README.md)を参照してください。
 
 Chromeで公開URLを開き、「アプリをインストール」ボタン、またはChromeメニューのインストール項目から追加します。単なるホーム画面ショートカットではなく、WebAPKとして登録される方式を想定しています。Androidの「設定 → アプリ」に「Fischer's Quest」が表示されることを確認してください。
 
