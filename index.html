@@ -860,6 +860,7 @@
       <div class="resume-row">
         <button class="button" id="resumeQuest" type="button">再生を再開</button>
         <button class="button secondary" id="retryPlayer" type="button" hidden>同じ動画を再読み込み</button>
+        <button class="button secondary" id="nextVideo" type="button" hidden>次の動画へ</button>
       </div>
     </section>
     <section class="error-box hidden" id="errorBox" role="alert"></section>
@@ -917,7 +918,7 @@
       'retryDurations','questList','catalog','setup','apiKey','saveKey','refresh','query',
       'yearFrom','yearTo','libraryFilter','grid','empty','errorBox','candidateCount','refreshCandidates',
       'watchArea','playerProgress','playerTitle','playerMeta','playerMessage','resumeQuest',
-      'retryPlayer','cooldown','lockTitle','lockRemaining','unlockTime'
+      'retryPlayer','nextVideo','cooldown','lockTitle','lockRemaining','unlockTime'
     ].map(id => [id, document.getElementById(id)]));
     let allVideos = [];
     let candidateIds = [];
@@ -937,8 +938,6 @@
     let playerReady = false;
     let playerAPI = null;
     let loadingPlayer = false;
-    let sampleTime = 0;
-    let samplePosition = 0;
     let hasPlayed = false;
     let handledEnd = false;
     let lastProgressSave = 0;
@@ -1151,6 +1150,7 @@
       els.planning.hidden = quest.phase !== 'planning';
       els.catalog.hidden = quest.phase !== 'planning';
       els.watchArea.hidden = quest.phase !== 'running';
+      els.nextVideo.hidden = quest.phase !== 'running' || quest.index + 1 >= quest.items.length;
       if (locked) {
         const seconds = Math.max(0, Math.ceil((quest.lockedUntil - Date.now()) / 1000));
         els.lockRemaining.textContent = String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0');
@@ -1257,8 +1257,6 @@
       if (!playerReady || quest.phase !== 'running') return;
       hasPlayed = false;
       handledEnd = false;
-      sampleTime = Date.now();
-      samplePosition = quest.checkpoint;
       els.retryPlayer.hidden = true;
       els.resumeQuest.hidden = false;
       els.playerMessage.textContent = '';
@@ -1269,58 +1267,39 @@
       if (!currentVideoMatches()) return;
       if (event.data === 1) {
         hasPlayed = true;
-        sampleTime = Date.now();
-        samplePosition = player.getCurrentTime();
         els.playerMessage.textContent = '';
         els.resumeQuest.hidden = true;
         els.retryPlayer.hidden = true;
-        if (samplePosition > quest.checkpoint + 3) player.seekTo(quest.checkpoint, true);
       } else if (event.data === 0) {
         finishCurrentVideo();
       } else if (event.data === 2) {
         els.resumeQuest.hidden = false;
+        recordProgress(true);
       }
     }
-    // Only continuous playback extends the saved position; a forward seek cannot complete a video.
-    function recordProgress(ended = false) {
+    function recordProgress(forceSave = false) {
       if (!hasPlayed || !currentVideoMatches()) return;
-      const now = Date.now();
       const position = Number(player.getCurrentTime());
-      const elapsed = Math.min(3, Math.max(0, (now - sampleTime) / 1000));
-      const rate = Number(player.getPlaybackRate?.()) || 1;
-      const allowance = elapsed * rate + 1.5;
-      if (Number.isFinite(position) && position <= quest.checkpoint + allowance
-          && position - samplePosition <= allowance && (player.getPlayerState() === 1 || ended)) {
-        quest.checkpoint = Math.max(quest.checkpoint, position);
-      } else if (Number.isFinite(position) && position > quest.checkpoint + allowance) {
-        player.seekTo(quest.checkpoint, true);
-      }
-      sampleTime = now;
-      samplePosition = position;
-      if (now - lastProgressSave >= 4000) { saveQuest(); lastProgressSave = now; }
+      if (!Number.isFinite(position) || position < 0) return;
+      quest.checkpoint = position;
+      const now = Date.now();
+      if (forceSave || now - lastProgressSave >= 4000) { saveQuest(); lastProgressSave = now; }
+    }
+    function advanceQuest() {
+      if (quest.phase !== 'running' || quest.index + 1 >= quest.items.length) return false;
+      quest.index += 1;
+      quest.checkpoint = 0;
+      saveQuest();
+      if (playerReady) loadCurrentVideo();
+      else { renderPhase(); resumeQuest(); }
+      return true;
     }
     function finishCurrentVideo() {
       if (handledEnd || !hasPlayed || !currentVideoMatches()) return;
-      recordProgress(true);
-      const actualDuration = Number(player.getDuration()) || quest.items[quest.index].durationSeconds;
-      const tolerance = Math.min(2, actualDuration * .02);
-      if (quest.checkpoint < actualDuration - tolerance) {
-        els.playerMessage.textContent = '未視聴の位置から再開します。';
-        player.seekTo(quest.checkpoint, true);
-        player.playVideo();
-        return;
-      }
       handledEnd = true;
       state.watched.add(quest.items[quest.index].id);
       saveState();
-      if (quest.index + 1 < quest.items.length) {
-        quest.index += 1;
-        quest.checkpoint = 0;
-        saveQuest();
-        loadCurrentVideo();
-      } else {
-        beginCooldown();
-      }
+      if (!advanceQuest()) beginCooldown();
     }
     function destroyPlayer() {
       if (player) { try { player.destroy(); } catch {} }
@@ -1642,6 +1621,7 @@
     });
     els.startQuest.addEventListener('click', startQuest);
     els.resumeQuest.addEventListener('click', resumeQuest);
+    els.nextVideo.addEventListener('click', advanceQuest);
     els.retryPlayer.addEventListener('click', () => {
       if (quest.phase !== 'running') return;
       destroyPlayer();

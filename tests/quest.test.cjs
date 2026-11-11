@@ -70,21 +70,33 @@ async function main() {
   assert.equal(reloaded.get('quest.index'), 0);
   assert.equal(reloaded.nodes.get('catalog').hidden, true);
 
-  app.run(`playerReady=true;hasPlayed=true;sampleTime=Date.now();samplePosition=0;
-    player={pos:125,id:'bbbbbbbbbbb',seeks:[],destroy(){this.destroyed=true;},
+  app.run(`playerReady=true;hasPlayed=true;
+    player={pos:90,id:'bbbbbbbbbbb',destroy(){this.destroyed=true;},
       getVideoData(){return {video_id:this.id};},getCurrentTime(){return this.pos;},
-      getPlaybackRate(){return 1;},getPlayerState(){return 0;},getDuration(){return quest.items[quest.index].durationSeconds;},
-      seekTo(value){this.seeks.push(value);this.pos=value;},playVideo(){},
+      seekTo(){throw new Error('Playback must not be rewound');},
       loadVideoById(value){this.id=value.videoId;this.pos=value.startSeconds;}};
+    recordProgress(true);`);
+  assert.equal(app.get('quest.checkpoint'), 90, 'Forward seeking is saved');
+  app.run('player.pos=42;onPlayerState({data:2});');
+  assert.equal(boot(new Map(app.saved)).get('quest.checkpoint'), 42, 'Rewinding and pausing updates the resume position');
+
+  const automatic = boot(new Map(app.saved));
+  automatic.run(`playerReady=true;hasPlayed=true;
+    player={getVideoData(){return {video_id:'bbbbbbbbbbb'};},loadVideoById(){}};
     finishCurrentVideo();`);
-  assert.equal(app.get('quest.index'), 0, 'Seeking to the end cannot advance the queue');
-  assert.ok(app.get('player.seeks.length') >= 1);
-  app.run('quest.checkpoint=125;samplePosition=125;player.pos=125;hasPlayed=true;finishCurrentVideo();');
+  assert.equal(automatic.get('quest.index'), 1, 'YouTube ended event advances even after seeking');
+
+  assert.equal(app.nodes.get('nextVideo').hidden, false);
+  assert.equal(app.run('advanceQuest()'), true);
   assert.equal(app.get('quest.index'), 1);
   assert.equal(app.get('quest.checkpoint'), 0);
+  assert.equal(app.get('player.id'), 'aaaaaaaaaaa');
+  assert.equal(app.get('state.watched.has("bbbbbbbbbbb")'), false, 'Manual skips do not mark the skipped video watched');
+  assert.equal(app.nodes.get('nextVideo').hidden, true);
+  assert.equal(app.run('advanceQuest()'), false, 'There is no next-video action on the last item');
   app.run('finishCurrentVideo()');
   assert.equal(app.get('quest.phase'), 'running', 'Duplicate end events do not clear the next video');
-  app.run('quest.checkpoint=65;samplePosition=65;player.pos=65;hasPlayed=true;finishCurrentVideo();');
+  app.run('player.pos=65;hasPlayed=true;finishCurrentVideo();');
   assert.equal(app.get('quest.phase'), 'locked');
   assert.equal(app.nodes.get('cooldown').hidden, false);
   assert.equal(app.nodes.get('lockRemaining').textContent, '30:00');
@@ -109,7 +121,7 @@ async function main() {
   assert.equal(failed.run('parseDuration("P1DT2H3M4S")'), 93784);
   assert.equal(failed.run('parseDuration("PT0S")'), null);
   assert.ok(app.saved.has(KEY));
-  console.log('PASS: selection, duration API, midnight estimate, fixed order, reload, seek/duplicate guards, cooldown, expiry, unavailable videos');
+  console.log('PASS: selection, duration API, seeking/resume, next button, automatic advance, duplicate ends, cooldown, expiry');
 }
 module.exports = { boot, fixtures };
 if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });
