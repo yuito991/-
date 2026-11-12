@@ -51,7 +51,7 @@ function boot(saved = new Map()) {
 async function main() {
   const app = boot();
   app.run('allVideos=' + JSON.stringify(fixtures));
-  app.run('render()');
+  app.run('beginSelection()');
   app.run('selectVideo("aaaaaaaaaaa"); selectVideo("bbbbbbbbbbb");');
   assert.equal(app.nodes.get('startQuest').disabled, true);
   app.run('els.apiKey.value="test-key"');
@@ -113,7 +113,7 @@ async function main() {
 
   const failed = boot();
   failed.run('allVideos=' + JSON.stringify(fixtures));
-  failed.run('render()');
+  failed.run('beginSelection()');
   failed.run('selectVideo("aaaaaaaaaaa");els.apiKey.value="test-key";fetch=async()=>({ok:true,json:async()=>({items:[]})});');
   await failed.run('loadDurations()');
   assert.equal(failed.nodes.get('startQuest').disabled, true, 'Unavailable videos cannot start');

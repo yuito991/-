@@ -11,7 +11,7 @@ const fixtures = Array.from({ length: 20 }, (_, index) => {
 });
 const app = boot();
 app.run('allVideos=' + JSON.stringify(fixtures));
-app.run('els.yearFrom.value="2020";els.yearTo.value="2020";Math.random=()=>0.37;render();');
+app.run('els.yearFrom.value="2020";els.yearTo.value="2020";Math.random=()=>0.37;beginSelection();');
 const first = app.get('candidateIds');
 assert.equal(first.length, 5);
 assert.equal(new Set(first).size, 5);

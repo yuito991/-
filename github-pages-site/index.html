@@ -795,10 +795,17 @@
     .card.selected { outline: 2px solid var(--accent); }
     .duration-badge { position: absolute; right: 8px; bottom: 8px; padding: 3px 5px; border-radius: 3px; color: #fff; background: #000d; font-size: .8rem; }
     .selection-button { width: 100%; min-height: 42px; background: var(--soft); border: 1px solid var(--line); border-radius: 6px; color: var(--ink); font-weight: 700; }
-    .candidate-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 0 12px; }
+    .candidate-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 0 12px; scroll-margin-top: 72px; }
     .candidate-head h2 { margin: 0; font-size: 1rem; }
     .candidate-head span { color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
     .candidate-actions { display: flex; align-items: center; gap: 12px; }
+    .selection-dock { position: fixed; z-index: 20; inset-inline: 0; bottom: 0; padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px)); background: var(--panel); border-top: 1px solid var(--line); box-shadow: 0 -6px 24px #0002; }
+    .selection-dock-inner { max-width: 1220px; margin: auto; display: flex; align-items: center; gap: 8px; }
+    .selection-clock { display: grid; gap: 2px; margin-right: auto; color: var(--muted); font-size: .75rem; }
+    .selection-clock strong { color: var(--ink); font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+    .selection-dock .icon-button { width: 44px; height: 44px; font-size: 1.25rem; flex-shrink: 0; }
+    .selection-dock .button { min-height: 44px; }
+    body.selecting-videos .shell { padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px)); }
     .watch-area { display: block; }
     .player-panel { border: 0; }
     .player-frame { width: 100%; min-height: 200px; aspect-ratio: 16/9; border: 0; }
@@ -816,6 +823,7 @@
     button:disabled { cursor: not-allowed; opacity: .5; }
     button:focus-visible, a:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 3px; }
     @media (max-width: 600px) {
+      .candidate-head { scroll-margin-top: 8px; }
       .quest-stats { gap: 12px 20px; }
       .quest-stats .button { width: 100%; margin-left: 0; }
       .quest-row { grid-template-columns: 20px 56px minmax(0,1fr); gap: 7px; }
@@ -841,7 +849,7 @@
         <dl class="quest-stat"><dt>選択した動画</dt><dd id="queueCount">0本</dd></dl>
         <dl class="quest-stat"><dt>合計時間</dt><dd id="totalDuration">0分</dd></dl>
         <dl class="quest-stat"><dt>今から見たら終了予定</dt><dd id="finishTime">--:--</dd></dl>
-        <button class="button accent" id="startQuest" type="button" disabled>クエスト開始</button>
+        <button class="button accent" id="startQuest" type="button" disabled>選択スタート</button>
       </div>
       <p class="quest-note" id="queueNote" role="status"></p>
       <button class="button secondary" id="retryDurations" type="button" hidden>動画時間を再取得</button>
@@ -882,15 +890,24 @@
         </select>
         <button class="button" id="refresh" type="button">更新</button>
       </section>
-      <div class="candidate-head">
-        <h2>動画候補</h2>
-        <div class="candidate-actions">
-          <span id="candidateCount">0本</span>
-          <button class="icon-button" id="refreshCandidates" type="button" title="候補を入れ替える" aria-label="候補を入れ替える">↻</button>
+      <section id="candidatePanel" hidden aria-labelledby="candidateHeading">
+        <div class="candidate-head" id="candidateHead">
+          <h2 id="candidateHeading">動画候補</h2>
+          <div class="candidate-actions">
+            <span id="candidateCount">0本</span>
+            <button class="icon-button" id="refreshCandidates" type="button" title="候補を入れ替える" aria-label="候補を入れ替える">↻</button>
+          </div>
+        </div>
+        <section class="grid" id="grid" aria-label="ランダムな動画候補"></section>
+        <section class="empty hidden" id="empty">表示できる動画がありません。</section>
+      </section>
+      <div class="selection-dock" id="selectionDock" hidden aria-label="動画選択の操作">
+        <div class="selection-dock-inner">
+          <span class="selection-clock">残り時間 <strong id="selectionTime" role="timer">01:00</strong></span>
+          <button class="icon-button" id="refreshCandidatesBottom" type="button" title="候補を入れ替える" aria-label="下部の候補入れ替え">↻</button>
+          <button class="button accent" id="playSelection" type="button" disabled>再生する</button>
         </div>
       </div>
-      <section class="grid" id="grid" aria-label="ランダムな動画候補"></section>
-      <section class="empty hidden" id="empty">表示できる動画がありません。</section>
     </div>
   </main>
   <section class="cooldown" id="cooldown" hidden role="dialog" aria-modal="true" aria-labelledby="lockTitle">
@@ -913,10 +930,12 @@
     const CACHE_DESCRIPTION_LIMIT = 120;
     const AUTO_REFRESH_MS = 12 * 60 * 60 * 1000;
     const COOLDOWN_MS = 30 * 60 * 1000;
+    const SELECTION_MS = 60 * 1000;
     const els = Object.fromEntries([
       'app','planning','queueCount','totalDuration','finishTime','startQuest','queueNote',
       'retryDurations','questList','catalog','setup','apiKey','saveKey','refresh','query',
       'yearFrom','yearTo','libraryFilter','grid','empty','errorBox','candidateCount','refreshCandidates',
+      'candidatePanel','candidateHead','selectionDock','selectionTime','refreshCandidatesBottom','playSelection',
       'watchArea','playerProgress','playerTitle','playerMeta','playerMessage','resumeQuest',
       'retryPlayer','nextVideo','cooldown','lockTitle','lockRemaining','unlockTime'
     ].map(id => [id, document.getElementById(id)]));
@@ -931,6 +950,7 @@
     let archiveNextPageToken = '';
     let state = loadState();
     let quest = readQuest();
+    let selectionMessage = '';
     let durationBusy = false;
     let durationTimer = 0;
     const durationErrors = new Map();
@@ -958,7 +978,7 @@
       } catch { showError('視聴状態を保存できません。ブラウザの保存容量を確認してください。'); }
     }
     function emptyQuest() {
-      return { phase: 'planning', items: [], index: 0, checkpoint: 0, lockedUntil: 0 };
+      return { phase: 'planning', items: [], index: 0, checkpoint: 0, lockedUntil: 0, selectionUntil: 0 };
     }
     function readQuest() {
       try {
@@ -971,7 +991,9 @@
           .map(v => ({ ...v, durationSeconds: Number(v.durationSeconds) > 0 ? Number(v.durationSeconds) : null }));
         const running = data.phase === 'running' && items.length && items.every(v => v.durationSeconds > 0)
           && Number.isInteger(data.index) && data.index >= 0 && data.index < items.length;
+        const selectionUntil = Number(data.selectionUntil);
         return { ...emptyQuest(), items, phase: running ? 'running' : 'planning',
+          selectionUntil: !running && Number.isFinite(selectionUntil) && selectionUntil > 0 ? selectionUntil : 0,
           index: running ? data.index : 0, checkpoint: running ? Math.max(0, Math.min(Number(data.checkpoint) || 0, items[data.index].durationSeconds)) : 0 };
       } catch { return emptyQuest(); }
     }
@@ -1033,12 +1055,13 @@
     }
     function render(redrawCandidates = false) {
       if (quest.phase !== 'planning') { renderPhase(); return; }
-      const videos = drawCandidates(redrawCandidates);
+      const videos = isSelecting() ? drawCandidates(redrawCandidates) : [];
       els.grid.innerHTML = videos.map(videoCard).join('');
       els.empty.classList.toggle('hidden', videos.length > 0);
       els.empty.textContent = filteredVideos().length ? 'この条件の動画はすべて選択済みです。' : 'この条件に合う動画がありません。';
       els.candidateCount.textContent = videos.length + '本';
       els.refreshCandidates.disabled = !videos.length;
+      els.refreshCandidatesBottom.disabled = !videos.length;
       renderQueue();
     }
     function videoCard(video) {
@@ -1053,39 +1076,60 @@
         + '<button class="selection-button" type="button" data-select="' + escapeHtml(video.id) + '">' + (order >= 0 ? '選択済み · ' + (order + 1) + '番目' : '追加する') + '</button>'
         + '</div></article>';
     }
-    function renderQueue() {
+    function isSelecting() {
+      return quest.phase === 'planning' && quest.selectionUntil > Date.now();
+    }
+    function renderSelectionControls(selecting) {
+      els.candidatePanel.hidden = !selecting;
+      els.selectionDock.hidden = !selecting;
+      document.body.classList.toggle('selecting-videos', selecting);
+      if (selecting) {
+        const seconds = Math.ceil((quest.selectionUntil - Date.now()) / 1000);
+        els.selectionTime.textContent = String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0');
+      }
+    }
+    function renderQueue(updateRows = true) {
+      const selecting = isSelecting();
+      renderSelectionControls(selecting);
       const missing = quest.items.filter(v => !(v.durationSeconds > 0));
       const total = quest.items.reduce((sum, v) => sum + (v.durationSeconds || 0), 0);
       els.queueCount.textContent = quest.items.length + '本';
       els.totalDuration.textContent = missing.length ? '時間を取得中' : formatDuration(total);
       els.finishTime.textContent = quest.items.length && !missing.length ? clockTime(Date.now() + total * 1000) : '--:--';
-      els.startQuest.disabled = !quest.items.length || missing.length > 0 || durationBusy || quest.phase !== 'planning';
       const hasError = quest.items.some(v => durationErrors.has(v.id));
+      const ready = quest.items.length > 0 && !missing.length && !durationBusy;
+      const canChoose = !quest.selectionUntil || hasError;
+      els.startQuest.textContent = selecting ? '再生する' : !quest.selectionUntil ? '選択スタート' : hasError ? '選び直す' : '再生準備中';
+      els.startQuest.disabled = quest.phase !== 'planning' || (selecting ? !ready : !canChoose || (!quest.items.length && !availableVideos().length));
+      els.playSelection.disabled = !selecting || !ready;
       els.retryDurations.hidden = !hasError;
       els.queueNote.textContent = hasError ? '動画時間を取得できません。APIキーと再生可否を確認して再取得してください。'
+        : !selecting && quest.selectionUntil ? '選択時間が終わりました。再生の準備をしています。'
         : missing.length ? '選択した動画の時間を取得しています。'
-        : quest.items.length ? '終了予定は広告・一時停止・通信待ちを含まない目安です。視聴終了後は30分ロックされます。' : '';
+        : selectionMessage || (quest.items.length ? '終了予定は広告・一時停止・通信待ちを含まない目安です。視聴終了後は30分ロックされます。' : '');
+      if (!updateRows) return;
       els.questList.innerHTML = quest.items.map((v, i) =>
         '<li class="quest-row"><span>' + (i + 1) + '</span><img src="' + escapeHtml(v.thumbnail) + '" alt="">'
         + '<div><p class="quest-row-title">' + escapeHtml(v.title) + '</p><small>' + (v.durationSeconds ? formatDuration(v.durationSeconds) : durationErrors.has(v.id) ? '取得できません' : '取得中') + '</small></div>'
         + '<div class="quest-row-tools">'
-        + '<button class="icon-button" type="button" data-queue="up" data-id="' + v.id + '" title="前へ移動" aria-label="前へ移動"' + (!i ? ' disabled' : '') + '>↑</button>'
-        + '<button class="icon-button" type="button" data-queue="down" data-id="' + v.id + '" title="後ろへ移動" aria-label="後ろへ移動"' + (i === quest.items.length - 1 ? ' disabled' : '') + '>↓</button>'
-        + '<button class="icon-button" type="button" data-queue="remove" data-id="' + v.id + '" title="選択から削除" aria-label="選択から削除">×</button></div></li>'
+        + '<button class="icon-button" type="button" data-queue="up" data-id="' + v.id + '" title="前へ移動" aria-label="前へ移動"' + (!selecting || !i ? ' disabled' : '') + '>↑</button>'
+        + '<button class="icon-button" type="button" data-queue="down" data-id="' + v.id + '" title="後ろへ移動" aria-label="後ろへ移動"' + (!selecting || i === quest.items.length - 1 ? ' disabled' : '') + '>↓</button>'
+        + '<button class="icon-button" type="button" data-queue="remove" data-id="' + v.id + '" title="選択から削除" aria-label="選択から削除"' + (!selecting ? ' disabled' : '') + '>×</button></div></li>'
       ).join('');
     }
     function selectVideo(id) {
-      if (quest.phase !== 'planning') return;
+      if (!isSelecting()) return;
       if (!candidateIds.includes(id) || quest.items.some(v => v.id === id)) return;
       const video = allVideos.find(v => v.id === id && !v.isShort);
       if (!video) return;
       quest.items.push({ ...video });
       saveQuest();
       render(true);
+      els.candidateHead.scrollIntoView({ behavior: 'auto', block: 'start' });
       scheduleDurations();
     }
     function changeQueue(id, action) {
-      if (quest.phase !== 'planning') return;
+      if (!isSelecting()) return;
       const index = quest.items.findIndex(v => v.id === id);
       if (index < 0) return;
       if (action === 'remove') quest.items.splice(index, 1);
@@ -1138,7 +1182,7 @@
         showError('動画時間を取得できません: ' + error.message);
       } finally {
         durationBusy = false;
-        render();
+        if (!finishSelectionIfDue()) render();
         if (quest.items.some(v => !v.durationSeconds && !durationErrors.has(v.id))) scheduleDurations();
       }
     }
@@ -1151,6 +1195,7 @@
       els.catalog.hidden = quest.phase !== 'planning';
       els.watchArea.hidden = quest.phase !== 'running';
       els.nextVideo.hidden = quest.phase !== 'running' || quest.index + 1 >= quest.items.length;
+      renderSelectionControls(isSelecting());
       if (locked) {
         const seconds = Math.max(0, Math.ceil((quest.lockedUntil - Date.now()) / 1000));
         els.lockRemaining.textContent = String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0');
@@ -1163,16 +1208,44 @@
         els.playerMeta.textContent = formatDuration(video.durationSeconds);
       }
     }
+    function beginSelection() {
+      if (quest.phase !== 'planning' || isSelecting() || (!quest.items.length && !availableVideos().length)) return;
+      if (quest.selectionUntil && !quest.items.some(v => durationErrors.has(v.id))) return;
+      const previousDeadline = quest.selectionUntil;
+      quest.selectionUntil = Date.now() + SELECTION_MS;
+      if (!saveQuest()) { quest.selectionUntil = previousDeadline; return; }
+      selectionMessage = '';
+      durationErrors.clear();
+      shownCandidateIds.clear();
+      render(true);
+      scheduleDurations();
+      els.candidateHead.scrollIntoView({ behavior: 'auto', block: 'start' });
+    }
+    function finishSelectionIfDue() {
+      if (quest.phase !== 'planning' || !quest.selectionUntil || isSelecting()) return false;
+      if (!quest.items.length) {
+        quest.selectionUntil = 0;
+        selectionMessage = '動画を選ばなかったため、選択時間が終了しました。';
+        saveQuest();
+        render();
+      } else if (!startQuest()) {
+        render();
+      }
+      return true;
+    }
     function startQuest() {
-      if (quest.phase !== 'planning' || !quest.items.length || quest.items.some(v => !v.durationSeconds) || durationBusy) return;
+      if (quest.phase !== 'planning' || !quest.selectionUntil || !quest.items.length || quest.items.some(v => !v.durationSeconds) || durationBusy) return false;
+      const deadline = quest.selectionUntil;
       quest.phase = 'running';
+      quest.selectionUntil = 0;
       quest.index = 0;
       quest.checkpoint = 0;
-      if (!saveQuest()) { quest.phase = 'planning'; return; }
+      if (!saveQuest()) { quest.phase = 'planning'; quest.selectionUntil = deadline; return false; }
       showError('');
       renderPhase();
       els.watchArea.scrollIntoView({ behavior:'auto', block:'start' });
       resumeQuest();
+      return true;
     }
     function loadPlayerAPI() {
       if (window.YT?.Player) return Promise.resolve();
@@ -1339,8 +1412,8 @@
           if (!currentVideoMatches()) loadCurrentVideo();
           else recordProgress();
         }
-      } else if (quest.items.length) {
-        renderQueue();
+      } else if (!finishSelectionIfDue() && (quest.items.length || isSelecting())) {
+        renderQueue(false);
       }
     }
     function clearLegacyCaches() {
@@ -1600,7 +1673,7 @@
       } catch { showError('保存データの一部を読み込めませんでした。'); }
       populateYears();
       renderPhase();
-      render();
+      if (!finishSelectionIfDue()) render();
       if (quest.phase === 'planning') { scheduleAutoFetch(); scheduleDurations(); }
     }
     function shouldAutoFetch() {
@@ -1619,7 +1692,8 @@
       const target = event.target.closest('[data-queue]');
       if (target) changeQueue(target.dataset.id, target.dataset.queue);
     });
-    els.startQuest.addEventListener('click', startQuest);
+    els.startQuest.addEventListener('click', () => isSelecting() ? startQuest() : beginSelection());
+    els.playSelection.addEventListener('click', startQuest);
     els.resumeQuest.addEventListener('click', resumeQuest);
     els.nextVideo.addEventListener('click', advanceQuest);
     els.retryPlayer.addEventListener('click', () => {
@@ -1638,7 +1712,13 @@
     [els.query, els.yearFrom, els.yearTo, els.libraryFilter].forEach(el => {
       el.addEventListener(el === els.query ? 'input' : 'change', () => render(true));
     });
-    els.refreshCandidates.addEventListener('click', () => render(true));
+    function redrawCandidateList() {
+      if (!isSelecting()) return;
+      render(true);
+      els.candidateHead.scrollIntoView({ behavior: 'auto', block: 'start' });
+    }
+    els.refreshCandidates.addEventListener('click', redrawCandidateList);
+    els.refreshCandidatesBottom.addEventListener('click', redrawCandidateList);
     window.addEventListener('pagehide', () => { if (quest.phase === 'running') { recordProgress(); saveQuest(); } });
     window.addEventListener('storage', event => {
       if (event.key !== QUEST_KEY && event.key !== LOCK_KEY) return;

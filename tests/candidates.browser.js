@@ -23,12 +23,28 @@ async page => {
     contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270"><rect width="480" height="270" fill="#164e63"/><rect x="190" y="85" width="100" height="100" rx="8" fill="#0ea5e9"/><path d="M225 110v50l38-25z" fill="white"/></svg>'
   }));
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.clock.install();
   await page.goto('http://127.0.0.1:8876', { waitUntil: 'domcontentloaded' });
   console.log((await page.locator('body').innerText()).slice(0, 400));
   await page.getByRole('combobox', { name: '開始年', exact: true }).selectOption('2020');
   await page.getByRole('combobox', { name: '終了年', exact: true }).selectOption('2020');
   const ids = () => page.locator('#grid .thumb-btn').evaluateAll(nodes => nodes.map(node => node.dataset.select));
+  await page.getByRole('button', { name: '選択スタート', exact: true }).click();
+  const initial = await ids();
+  check(initial.length === 5, 'Starts with five candidates');
+  await page.clock.runFor(5000);
+  const deadline = () => page.evaluate(() => JSON.parse(localStorage.getItem('fischersQuestV1')).selectionUntil);
+  const initialDeadline = await deadline();
+  await page.evaluate(() => scrollTo(0, document.documentElement.scrollHeight));
+  const bottomRefresh = page.locator('#refreshCandidatesBottom');
+  const bounds = await bottomRefresh.boundingBox();
+  check(bounds && bounds.y >= 0 && bounds.y + bounds.height <= 844, 'Mobile reroll stays visible at the bottom');
+  await page.screenshot({ path: 'output/playwright/candidates-mobile-bottom.png' });
+  await bottomRefresh.click();
   const first = await ids();
+  check(first.every(id => !initial.includes(id)), 'Bottom reroll changes all five');
+  check(await deadline() === initialDeadline, 'Reroll does not reset timer');
+  check(await page.locator('#candidateHead').evaluate(el => el.getBoundingClientRect().top < 100), 'Reroll returns to first result');
   check(first.length === 5 && new Set(first).size === 5, 'Exactly five unique candidates');
   check((await page.locator('#grid .meta').allTextContents()).every(text => text.includes('2020')), 'Period applies');
   await page.locator('#grid .thumb-btn').first().click();
@@ -57,6 +73,7 @@ async page => {
   check((await ids()).length === 2, 'Two available videos shown');
   check((await page.locator('#grid .meta').allTextContents()).every(text => text.includes('2019')), 'Changed period applies');
   await page.reload({ waitUntil: 'domcontentloaded' });
+  check(await deadline() === initialDeadline, 'Reload preserves selection deadline');
   check(await page.locator('#queueCount').innerText() === '2本', 'Queue survives reload');
   check((await ids()).length === 5 && (await ids()).every(id => !chosen.includes(id)), 'Reload respects selected exclusions');
   console.log('PASS browser: five candidates, next draw, period/search, fewer than five, queue persistence, mobile/desktop');
