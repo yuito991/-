@@ -903,7 +903,7 @@
       </section>
       <div class="selection-dock" id="selectionDock" hidden aria-label="動画選択の操作">
         <div class="selection-dock-inner">
-          <span class="selection-clock">残り時間 <strong id="selectionTime" role="timer">00:30</strong></span>
+          <span class="selection-clock">残り時間 <strong id="selectionTime" role="timer">00:20</strong></span>
           <button class="icon-button" id="refreshCandidatesBottom" type="button" title="候補を入れ替える" aria-label="下部の候補入れ替え">↻</button>
           <button class="button accent" id="playSelection" type="button" disabled>再生する</button>
         </div>
@@ -930,7 +930,7 @@
     const CACHE_DESCRIPTION_LIMIT = 120;
     const AUTO_REFRESH_MS = 12 * 60 * 60 * 1000;
     const COOLDOWN_MS = 30 * 60 * 1000;
-    const SELECTION_MS = 30 * 1000;
+    const SELECTION_MS = 20 * 1000;
     const els = Object.fromEntries([
       'app','planning','queueCount','totalDuration','finishTime','startQuest','queueNote',
       'retryDurations','questList','catalog','setup','apiKey','saveKey','refresh','query',
