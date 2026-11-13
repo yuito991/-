@@ -49,7 +49,7 @@ async page => {
   await page.screenshot({ path: 'output/playwright/quest-mobile-selection.png', fullPage: true });
   await page.setViewportSize({ width: 1366, height: 900 });
   await page.screenshot({ path: 'output/playwright/quest-desktop-selection.png', fullPage: true });
-  await page.clock.runFor(15000);
+  await page.clock.runFor(10000);
   await page.clock.runFor(500);
   check(await page.locator('#catalog').isHidden(), 'Catalog hidden during playback');
   check(await page.locator('#playerProgress').innerText() === '1 / 2 本', 'First video');
