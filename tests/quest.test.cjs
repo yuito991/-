@@ -140,6 +140,19 @@ async function main() {
   assert.equal(presets.nodes.get('totalDuration').textContent, '36分54秒');
   assert.equal(presets.nodes.get('retryDurations').hidden, true);
   assert.equal(presets.run('resumeQuest=()=>{};startQuest()'), true, 'Preset queue plays without an API key');
+
+  const direct = boot();
+  assert.equal(direct.nodes.get('presetPanel').hidden, false);
+  assert.equal(direct.nodes.get('candidatePanel').hidden, true);
+  assert.equal(direct.run('resumeQuest=()=>{};playPreset("ZNWfZclu72c")'), true);
+  assert.deepEqual(direct.get('quest.items.map(v=>v.id)'), ['ZNWfZclu72c']);
+  assert.equal(direct.get('quest.selectionUntil'), 0);
+  assert.equal(direct.nodes.get('presetPanel').hidden, true);
+  assert.equal(direct.nodes.get('nextVideo').hidden, true);
+  assert.equal(boot(new Map(direct.saved)).get('quest.phase'), 'running');
+  direct.run('beginCooldown()');
+  assert.equal(direct.run('playPreset("VtKYjNo8IXI")'), false, 'Direct playback respects the cooldown');
+  assert.equal(direct.get('quest.phase'), 'locked');
   assert.ok(app.saved.has(KEY));
   console.log('PASS: selection, duration API, seeking/resume, next button, automatic advance, duplicate ends, cooldown, expiry');
 }

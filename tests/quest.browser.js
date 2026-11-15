@@ -27,7 +27,9 @@ async page => {
   }));
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('http://127.0.0.1:8876', { waitUntil: 'domcontentloaded' });
-  console.log('Initial page:', (await page.locator('body').innerText()).slice(0, 500));
+  check(await page.locator('#presetList button:visible').count() === 3, 'Three presets shown before selection');
+  check(await page.locator('#selectionDock').isHidden(), 'No timer until selection starts');
+  await page.screenshot({ path: 'output/playwright/quest-mobile-presets.png' });
   await page.getByRole('button', { name: '選択スタート', exact: true }).click();
   check(await page.locator('#presetList button').count() === 3, 'Three presets on a fresh browser without a key');
   await page.locator('#presetList [data-select="' + first + '"]').click();
@@ -63,6 +65,12 @@ async page => {
   check(await page.locator('#cooldown').isHidden(), 'Lock expires');
   check(await page.locator('#catalog').isVisible(), 'Selection returns');
   check(await page.locator('iframe').count() === 0, 'No autoplay after unlock');
+  await page.locator('#presetList [data-select="' + second + '"]').click();
+  await page.clock.runFor(500);
+  check(await page.locator('#watchArea').isVisible(), 'Preset opens immediately without selection');
+  check(await page.locator('#playerProgress').innerText() === '1 / 1 本', 'Only the tapped video plays');
+  check(await page.locator('#pauseQuest').isVisible(), 'Preset starts playing');
+  check(await page.locator('#selectionDock').isHidden(), 'Direct playback skips the selection timer');
   check(dataApiCalls === 0, 'Preset selection and playback do not call the Data API');
-  console.log('PASS browser: no-key presets, forward-only controls, automatic order, lock, reload, 30-minute expiry');
+  console.log('PASS browser: direct- and timed-play presets, forward-only controls, lock, reload, 30-minute expiry');
 }

@@ -799,6 +799,7 @@
     .candidate-head h2 { margin: 0; font-size: 1rem; }
     .candidate-head span { color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
     .candidate-actions { display: flex; align-items: center; gap: 12px; }
+    .preset-panel { margin-bottom: 18px; }
     .preset-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
     .preset-button { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 10px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); text-align: left; }
     .preset-button img { width: 80px; aspect-ratio: 16/9; object-fit: cover; border-radius: 4px; }
@@ -849,6 +850,10 @@
       </div>
       <button class="button secondary" id="installApp" type="button" hidden>アプリをインストール</button>
     </header>
+    <section class="preset-panel" id="presetPanel" hidden aria-labelledby="presetHeading">
+      <div class="candidate-head" id="presetHead"><h2 id="presetHeading">定番の動画</h2></div>
+      <div class="preset-list" id="presetList"></div>
+    </section>
     <section class="quest-summary" id="planning" aria-labelledby="questHeading">
       <h2 class="quest-heading" id="questHeading">今回の動画</h2>
       <div class="quest-stats">
@@ -899,10 +904,6 @@
         <button class="button" id="refresh" type="button">更新</button>
       </section>
       <section id="candidatePanel" hidden aria-label="動画選択">
-        <section aria-labelledby="presetHeading">
-          <div class="candidate-head" id="presetHead"><h2 id="presetHeading">定番の動画</h2></div>
-          <div class="preset-list" id="presetList"></div>
-        </section>
         <div class="candidate-head" id="candidateHead">
           <h2 id="candidateHeading">動画候補</h2>
           <div class="candidate-actions">
@@ -952,7 +953,7 @@
       'app','planning','queueCount','totalDuration','finishTime','startQuest','queueNote',
       'retryDurations','questList','catalog','setup','apiKey','saveKey','refresh','query',
       'yearFrom','yearTo','libraryFilter','grid','empty','errorBox','candidateCount','refreshCandidates',
-      'candidatePanel','candidateHead','presetHead','presetList','selectionDock','selectionTime','refreshCandidatesBottom','playSelection',
+      'candidatePanel','candidateHead','presetPanel','presetHead','presetList','selectionDock','selectionTime','refreshCandidatesBottom','playSelection',
       'watchArea','playerProgress','playerTitle','playerMeta','playerMessage','resumeQuest',
       'pauseQuest','seekForward','retryPlayer','nextVideo','cooldown','lockTitle','lockRemaining','unlockTime'
     ].map(id => [id, document.getElementById(id)]));
@@ -1072,8 +1073,9 @@
     }
     function render(redrawCandidates = false) {
       if (quest.phase !== 'planning') { renderPhase(); return; }
-      const videos = isSelecting() ? drawCandidates(redrawCandidates) : [];
-      els.presetList.innerHTML = isSelecting() ? [...PRESET_VIDEOS.values()].map(presetButton).join('') : '';
+      const selecting = isSelecting();
+      const videos = selecting ? drawCandidates(redrawCandidates) : [];
+      els.presetList.innerHTML = [...PRESET_VIDEOS.values()].map(video => presetButton(video, selecting)).join('');
       els.grid.innerHTML = videos.map(videoCard).join('');
       els.empty.classList.toggle('hidden', videos.length > 0);
       els.empty.textContent = filteredVideos().length ? 'この条件の動画はすべて選択済みです。' : 'この条件に合う動画がありません。';
@@ -1082,12 +1084,14 @@
       els.refreshCandidatesBottom.disabled = !videos.length;
       renderQueue();
     }
-    function presetButton(video) {
-      const order = quest.items.findIndex(v => v.id === video.id);
+    function presetButton(video, selecting) {
+      const selected = selecting && quest.items.some(v => v.id === video.id);
+      const disabled = selected || (!selecting && quest.selectionUntil);
+      const action = selecting ? selected ? '選択済み' : '追加' : '再生';
       return '<button class="preset-button" type="button" data-select="' + video.id + '"'
-        + (order >= 0 ? ' disabled' : '') + '><img src="' + video.thumbnail + '" alt="">'
+        + (disabled ? ' disabled' : '') + '><img src="' + video.thumbnail + '" alt="">'
         + '<span><span class="preset-title">' + escapeHtml(video.title) + '</span><small>'
-        + formatDuration(video.durationSeconds) + (order >= 0 ? ' · 選択済み' : '') + '</small></span></button>';
+        + formatDuration(video.durationSeconds) + ' · ' + action + '</small></span></button>';
     }
     function videoCard(video) {
       const order = quest.items.findIndex(v => v.id === video.id);
@@ -1217,6 +1221,7 @@
       document.body.classList.toggle('site-locked', locked);
       els.cooldown.hidden = !locked;
       els.app.inert = locked;
+      els.presetPanel.hidden = quest.phase !== 'planning';
       els.planning.hidden = quest.phase !== 'planning';
       els.catalog.hidden = quest.phase !== 'planning';
       els.watchArea.hidden = quest.phase !== 'running';
@@ -1260,13 +1265,19 @@
       return true;
     }
     function startQuest() {
-      if (quest.phase !== 'planning' || !quest.selectionUntil || !quest.items.length || quest.items.some(v => !v.durationSeconds) || durationBusy) return false;
-      const deadline = quest.selectionUntil;
-      quest.phase = 'running';
-      quest.selectionUntil = 0;
-      quest.index = 0;
-      quest.checkpoint = 0;
-      if (!saveQuest()) { quest.phase = 'planning'; quest.selectionUntil = deadline; return false; }
+      if (quest.phase !== 'planning' || !quest.selectionUntil || durationBusy) return false;
+      return startPlayback(quest.items);
+    }
+    function playPreset(id) {
+      const video = PRESET_VIDEOS.get(id);
+      if (!video || quest.phase !== 'planning' || quest.selectionUntil) return false;
+      return startPlayback([{ ...video }]);
+    }
+    function startPlayback(items) {
+      if (!items.length || items.some(v => !v.durationSeconds)) return false;
+      const previousQuest = quest;
+      quest = { ...emptyQuest(), phase: 'running', items };
+      if (!saveQuest()) { quest = previousQuest; return false; }
       showError('');
       renderPhase();
       els.watchArea.scrollIntoView({ behavior:'auto', block:'start' });
@@ -1733,7 +1744,12 @@
       if (target) selectVideo(target.dataset.select);
     }
     els.grid.addEventListener('click', selectFromButton);
-    els.presetList.addEventListener('click', selectFromButton);
+    els.presetList.addEventListener('click', event => {
+      const target = event.target.closest('[data-select]');
+      if (!target) return;
+      if (isSelecting()) selectVideo(target.dataset.select);
+      else playPreset(target.dataset.select);
+    });
     els.questList.addEventListener('click', event => {
       const target = event.target.closest('[data-queue]');
       if (target) changeQueue(target.dataset.id, target.dataset.queue);
