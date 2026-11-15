@@ -73,12 +73,18 @@ async function main() {
   app.run(`playerReady=true;hasPlayed=true;
     player={pos:90,id:'bbbbbbbbbbb',destroy(){this.destroyed=true;},
       getVideoData(){return {video_id:this.id};},getCurrentTime(){return this.pos;},
-      seekTo(){throw new Error('Playback must not be rewound');},
+      getDuration(){return this.id==='bbbbbbbbbbb'?125:65;},
+      seekTo(target){if(target<=this.pos)throw new Error('Playback must only seek forward');this.pos=target;},
       loadVideoById(value){this.id=value.videoId;this.pos=value.startSeconds;}};
     recordProgress(true);`);
   assert.equal(app.get('quest.checkpoint'), 90, 'Forward seeking is saved');
+  app.run('seekForward()');
+  assert.equal(app.get('player.pos'), 100, 'The forward button moves 10 seconds');
+  assert.equal(boot(new Map(app.saved)).get('quest.checkpoint'), 100, 'Forward progress saves immediately');
   app.run('player.pos=42;onPlayerState({data:2});');
-  assert.equal(boot(new Map(app.saved)).get('quest.checkpoint'), 42, 'Rewinding and pausing updates the resume position');
+  assert.equal(boot(new Map(app.saved)).get('quest.checkpoint'), 100, 'A lower player position never overwrites the saved checkpoint');
+  app.run('loadCurrentVideo()');
+  assert.equal(app.get('player.pos'), 100, 'Resuming does not subtract time');
 
   const automatic = boot(new Map(app.saved));
   automatic.run(`playerReady=true;hasPlayed=true;
@@ -120,6 +126,20 @@ async function main() {
   assert.equal(failed.nodes.get('retryDurations').hidden, false);
   assert.equal(failed.run('parseDuration("P1DT2H3M4S")'), 93784);
   assert.equal(failed.run('parseDuration("PT0S")'), null);
+
+  const presets = boot();
+  const presetIds = ['VtKYjNo8IXI', 'ZNWfZclu72c', 'ru_Bny5k-NY'];
+  assert.equal(presets.nodes.get('startQuest').disabled, false, 'Selection is available on a fresh install without a key');
+  presets.run('fetch=async()=>{throw new Error("No API calls expected")};beginSelection()');
+  for (const id of presetIds) {
+    assert.ok(presets.nodes.get('presetList').innerHTML.includes(id));
+    presets.run('selectVideo(' + JSON.stringify(id) + ')');
+  }
+  await presets.run('loadDurations()');
+  assert.deepEqual(presets.get('quest.items.map(v=>v.id)'), presetIds);
+  assert.equal(presets.nodes.get('totalDuration').textContent, '36分54秒');
+  assert.equal(presets.nodes.get('retryDurations').hidden, true);
+  assert.equal(presets.run('resumeQuest=()=>{};startQuest()'), true, 'Preset queue plays without an API key');
   assert.ok(app.saved.has(KEY));
   console.log('PASS: selection, duration API, seeking/resume, next button, automatic advance, duplicate ends, cooldown, expiry');
 }

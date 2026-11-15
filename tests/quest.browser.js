@@ -1,25 +1,14 @@
 async page => {
-  const fixtures = ['aaaaaaaaaaa', 'bbbbbbbbbbb'].map((id, index) => ({
-    id, title: index ? 'フィッシャーズ 動画B' : 'フィッシャーズ 動画A', description: '',
-    publishedAt: '2026-11-01T00:00:00Z', year: 2026,
-    thumbnail: 'https://i.ytimg.com/vi/' + id + '/hqdefault.jpg'
-  }));
   const check = (condition, message) => { if (!condition) throw new Error(message); };
+  const first = 'VtKYjNo8IXI';
+  const second = 'ZNWfZclu72c';
   await page.clock.install();
-  await page.addInitScript(({ fixtures }) => {
-    localStorage.setItem('fischers2017ViewerCacheV5', JSON.stringify({
-      videos: fixtures, archiveComplete: true, savedAt: new Date().toISOString()
-    }));
-    localStorage.setItem('fischers2017ViewerApiKey', 'test-key');
-  }, { fixtures });
-  await page.route('**/www.googleapis.com/youtube/v3/**', route => route.fulfill({
-    json: { items: fixtures.map((v, i) => ({ id: v.id, status: { embeddable: true },
-      snippet: { liveBroadcastContent: 'none' }, contentDetails: { duration: i ? 'PT2M5S' : 'PT1M5S' } })) }
-  }));
+  let dataApiCalls = 0;
+  await page.route('**/www.googleapis.com/youtube/v3/**', route => { dataApiCalls++; return route.abort(); });
   await page.route('**/www.youtube.com/iframe_api', route => route.fulfill({
     contentType: 'application/javascript', body: `
       window.YT={Player:class {
-        constructor(id,config){this.events=config.events;this.pos=0;this.state=2;
+        constructor(id,config){window.testPlayerVars=config.playerVars;this.events=config.events;this.pos=0;this.state=2;
           this.frame=document.createElement('iframe');this.frame.id=id;
           document.getElementById(id).replaceWith(this.frame);
           setTimeout(()=>this.events.onReady({target:this}),0);}
@@ -29,21 +18,22 @@ async page => {
           clearTimeout(this.timer);this.timer=setTimeout(()=>{this.pos=this.getDuration();this.state=0;this.events.onStateChange({data:0});},(this.getDuration()-this.pos)*1000);}
         getVideoData(){return {video_id:this.id};}
         getCurrentTime(){return this.state===1?Math.min(this.getDuration(),(Date.now()-this.start)/1000):this.pos;}
+        pauseVideo(){this.pos=this.getCurrentTime();this.state=2;clearTimeout(this.timer);this.events.onStateChange({data:2});}
         getPlayerState(){return this.state;}
-        getPlaybackRate(){return 1;}
-        getDuration(){return this.id==='aaaaaaaaaaa'?65:125;}
-        seekTo(value){this.pos=value;this.start=Date.now()-value*1000;}
+        getDuration(){return this.id==='${first}'?583:779;}
+        seekTo(value){this.pos=value;if(this.state===1)this.playVideo();}
         destroy(){clearTimeout(this.timer);this.frame.remove();}
       }};window.onYouTubeIframeAPIReady();`
   }));
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('http://127.0.0.1:8876');
+  await page.goto('http://127.0.0.1:8876', { waitUntil: 'domcontentloaded' });
   console.log('Initial page:', (await page.locator('body').innerText()).slice(0, 500));
   await page.getByRole('button', { name: '選択スタート', exact: true }).click();
-  await page.getByRole('button', { name: 'フィッシャーズ 動画Aを選択', exact: true }).click();
-  await page.getByRole('button', { name: 'フィッシャーズ 動画Bを選択', exact: true }).click();
+  check(await page.locator('#presetList button').count() === 3, 'Three presets on a fresh browser without a key');
+  await page.locator('#presetList [data-select="' + first + '"]').click();
+  await page.locator('#presetList [data-select="' + second + '"]').click();
   await page.clock.runFor(500);
-  check(await page.locator('#totalDuration').innerText() === '3分10秒', 'Total duration');
+  check(await page.locator('#totalDuration').innerText() === '22分42秒', 'Total duration without a key');
   check(await page.locator('#playSelection').isEnabled(), 'Manual play is available before time runs out');
   check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Mobile overflow');
   await page.screenshot({ path: 'output/playwright/quest-mobile-selection.png', fullPage: true });
@@ -53,9 +43,16 @@ async page => {
   await page.clock.runFor(500);
   check(await page.locator('#catalog').isHidden(), 'Catalog hidden during playback');
   check(await page.locator('#playerProgress').innerText() === '1 / 2 本', 'First video');
-  await page.clock.runFor(65000);
+  check(await page.evaluate(() => window.testPlayerVars.controls === 0 && window.testPlayerVars.disablekb === 1), 'YouTube seek bar and keyboard shortcuts are disabled');
+  await page.locator('#pauseQuest').click();
+  const checkpoint = () => page.evaluate(() => JSON.parse(localStorage.getItem('fischersQuestV1')).checkpoint);
+  const pausedAt = await checkpoint();
+  await page.locator('#seekForward').click();
+  check(await checkpoint() >= pausedAt + 10, 'Forward seek is saved while paused');
+  await page.locator('#resumeQuest').click();
+  await page.clock.runFor(583000);
   check(await page.locator('#playerProgress').innerText() === '2 / 2 本', 'Automatic next video');
-  await page.clock.runFor(125000);
+  await page.clock.runFor(779000);
   check(await page.locator('#cooldown').isVisible(), 'Lock after all videos');
   check(await page.locator('iframe').count() === 0, 'No hidden player');
   await page.setViewportSize({ width: 390, height: 844 });
@@ -66,5 +63,6 @@ async page => {
   check(await page.locator('#cooldown').isHidden(), 'Lock expires');
   check(await page.locator('#catalog').isVisible(), 'Selection returns');
   check(await page.locator('iframe').count() === 0, 'No autoplay after unlock');
-  console.log('PASS browser: mobile/desktop selection, duration, automatic order, instant lock, reload, 30-minute expiry');
+  check(dataApiCalls === 0, 'Preset selection and playback do not call the Data API');
+  console.log('PASS browser: no-key presets, forward-only controls, automatic order, lock, reload, 30-minute expiry');
 }

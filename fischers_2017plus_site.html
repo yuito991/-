@@ -799,6 +799,11 @@
     .candidate-head h2 { margin: 0; font-size: 1rem; }
     .candidate-head span { color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
     .candidate-actions { display: flex; align-items: center; gap: 12px; }
+    .preset-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .preset-button { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 10px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); text-align: left; }
+    .preset-button img { width: 80px; aspect-ratio: 16/9; object-fit: cover; border-radius: 4px; }
+    .preset-title { display: block; font-size: .9rem; font-weight: 700; overflow-wrap: anywhere; }
+    .preset-button small { color: var(--muted); }
     .selection-dock { position: fixed; z-index: 20; inset-inline: 0; bottom: 0; padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px)); background: var(--panel); border-top: 1px solid var(--line); box-shadow: 0 -6px 24px #0002; }
     .selection-dock-inner { max-width: 1220px; margin: auto; display: flex; align-items: center; gap: 8px; }
     .selection-clock { display: grid; gap: 2px; margin-right: auto; color: var(--muted); font-size: .75rem; }
@@ -824,6 +829,7 @@
     button:focus-visible, a:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 3px; }
     @media (max-width: 600px) {
       .candidate-head { scroll-margin-top: 8px; }
+      .preset-list { grid-template-columns: 1fr; }
       .quest-stats { gap: 12px 20px; }
       .quest-stats .button { width: 100%; margin-left: 0; }
       .quest-row { grid-template-columns: 20px 56px minmax(0,1fr); gap: 7px; }
@@ -867,6 +873,8 @@
       <div class="player-message" id="playerMessage" role="status"></div>
       <div class="resume-row">
         <button class="button" id="resumeQuest" type="button">再生を再開</button>
+        <button class="button secondary" id="pauseQuest" type="button" hidden>一時停止</button>
+        <button class="button secondary" id="seekForward" type="button" disabled>10秒進む</button>
         <button class="button secondary" id="retryPlayer" type="button" hidden>同じ動画を再読み込み</button>
         <button class="button secondary" id="nextVideo" type="button" hidden>次の動画へ</button>
       </div>
@@ -874,7 +882,7 @@
     <section class="error-box hidden" id="errorBox" role="alert"></section>
     <div id="catalog">
       <section class="setup" id="setup">
-        <div><h2>YouTube Data API キー</h2><p>キーはこのブラウザ内に保存されます。</p></div>
+        <div><h2>YouTube Data API キー（任意）</h2><p>フィッシャーズの動画一覧を追加する場合に必要です。</p></div>
         <div class="key-row">
           <input class="input" id="apiKey" type="password" autocomplete="off" placeholder="APIキーを入力" aria-label="APIキー">
           <button class="button accent" id="saveKey" type="button">保存して取得</button>
@@ -890,7 +898,11 @@
         </select>
         <button class="button" id="refresh" type="button">更新</button>
       </section>
-      <section id="candidatePanel" hidden aria-labelledby="candidateHeading">
+      <section id="candidatePanel" hidden aria-label="動画選択">
+        <section aria-labelledby="presetHeading">
+          <div class="candidate-head" id="presetHead"><h2 id="presetHeading">定番の動画</h2></div>
+          <div class="preset-list" id="presetList"></div>
+        </section>
         <div class="candidate-head" id="candidateHead">
           <h2 id="candidateHeading">動画候補</h2>
           <div class="candidate-actions">
@@ -931,13 +943,18 @@
     const AUTO_REFRESH_MS = 12 * 60 * 60 * 1000;
     const COOLDOWN_MS = 30 * 60 * 1000;
     const SELECTION_MS = 10 * 1000;
+    const PRESET_VIDEOS = new Map([
+      ['VtKYjNo8IXI', 'ぼっち大学生だったシルクの学校生活を、もう一度...', 583],
+      ['ZNWfZclu72c', '【本気】超集中モードで８時間の動画を編集するシルクロード', 779],
+      ['ru_Bny5k-NY', '【仕事人】最速の編集者は何時間でメイン動画作り終えるのか！？', 852]
+    ].map(([id, title, durationSeconds]) => [id, { id, title, durationSeconds, thumbnail: `https://i.ytimg.com/vi/${id}/hqdefault.jpg` }]));
     const els = Object.fromEntries([
       'app','planning','queueCount','totalDuration','finishTime','startQuest','queueNote',
       'retryDurations','questList','catalog','setup','apiKey','saveKey','refresh','query',
       'yearFrom','yearTo','libraryFilter','grid','empty','errorBox','candidateCount','refreshCandidates',
-      'candidatePanel','candidateHead','selectionDock','selectionTime','refreshCandidatesBottom','playSelection',
+      'candidatePanel','candidateHead','presetHead','presetList','selectionDock','selectionTime','refreshCandidatesBottom','playSelection',
       'watchArea','playerProgress','playerTitle','playerMeta','playerMessage','resumeQuest',
-      'retryPlayer','nextVideo','cooldown','lockTitle','lockRemaining','unlockTime'
+      'pauseQuest','seekForward','retryPlayer','nextVideo','cooldown','lockTitle','lockRemaining','unlockTime'
     ].map(id => [id, document.getElementById(id)]));
     let allVideos = [];
     let candidateIds = [];
@@ -988,7 +1005,7 @@
         if (!data || data.phase === 'locked') return emptyQuest();
         const items = (Array.isArray(data.items) ? data.items : [])
           .filter(v => /^[A-Za-z0-9_-]{11}$/.test(v.id) && typeof v.title === 'string')
-          .map(v => ({ ...v, durationSeconds: Number(v.durationSeconds) > 0 ? Number(v.durationSeconds) : null }));
+          .map(v => ({ ...v, durationSeconds: Number(v.durationSeconds) > 0 ? Number(v.durationSeconds) : PRESET_VIDEOS.get(v.id)?.durationSeconds || null }));
         const running = data.phase === 'running' && items.length && items.every(v => v.durationSeconds > 0)
           && Number.isInteger(data.index) && data.index >= 0 && data.index < items.length;
         const selectionUntil = Number(data.selectionUntil);
@@ -1056,6 +1073,7 @@
     function render(redrawCandidates = false) {
       if (quest.phase !== 'planning') { renderPhase(); return; }
       const videos = isSelecting() ? drawCandidates(redrawCandidates) : [];
+      els.presetList.innerHTML = isSelecting() ? [...PRESET_VIDEOS.values()].map(presetButton).join('') : '';
       els.grid.innerHTML = videos.map(videoCard).join('');
       els.empty.classList.toggle('hidden', videos.length > 0);
       els.empty.textContent = filteredVideos().length ? 'この条件の動画はすべて選択済みです。' : 'この条件に合う動画がありません。';
@@ -1063,6 +1081,13 @@
       els.refreshCandidates.disabled = !videos.length;
       els.refreshCandidatesBottom.disabled = !videos.length;
       renderQueue();
+    }
+    function presetButton(video) {
+      const order = quest.items.findIndex(v => v.id === video.id);
+      return '<button class="preset-button" type="button" data-select="' + video.id + '"'
+        + (order >= 0 ? ' disabled' : '') + '><img src="' + video.thumbnail + '" alt="">'
+        + '<span><span class="preset-title">' + escapeHtml(video.title) + '</span><small>'
+        + formatDuration(video.durationSeconds) + (order >= 0 ? ' · 選択済み' : '') + '</small></span></button>';
     }
     function videoCard(video) {
       const order = quest.items.findIndex(v => v.id === video.id);
@@ -1100,7 +1125,7 @@
       const ready = quest.items.length > 0 && !missing.length && !durationBusy;
       const canChoose = !quest.selectionUntil || hasError;
       els.startQuest.textContent = selecting ? '再生する' : !quest.selectionUntil ? '選択スタート' : hasError ? '選び直す' : '再生準備中';
-      els.startQuest.disabled = quest.phase !== 'planning' || (selecting ? !ready : !canChoose || (!quest.items.length && !availableVideos().length));
+      els.startQuest.disabled = quest.phase !== 'planning' || (selecting ? !ready : !canChoose);
       els.playSelection.disabled = !selecting || !ready;
       els.retryDurations.hidden = !hasError;
       els.queueNote.textContent = hasError ? '動画時間を取得できません。APIキーと再生可否を確認して再取得してください。'
@@ -1119,13 +1144,14 @@
     }
     function selectVideo(id) {
       if (!isSelecting()) return;
-      if (!candidateIds.includes(id) || quest.items.some(v => v.id === id)) return;
-      const video = allVideos.find(v => v.id === id && !v.isShort);
+      if (quest.items.some(v => v.id === id)) return;
+      const preset = PRESET_VIDEOS.get(id);
+      const video = preset || (candidateIds.includes(id) && allVideos.find(v => v.id === id && !v.isShort));
       if (!video) return;
       quest.items.push({ ...video });
       saveQuest();
       render(true);
-      els.candidateHead.scrollIntoView({ behavior: 'auto', block: 'start' });
+      if (!preset) els.candidateHead.scrollIntoView({ behavior: 'auto', block: 'start' });
       scheduleDurations();
     }
     function changeQueue(id, action) {
@@ -1209,7 +1235,7 @@
       }
     }
     function beginSelection() {
-      if (quest.phase !== 'planning' || isSelecting() || (!quest.items.length && !availableVideos().length)) return;
+      if (quest.phase !== 'planning' || isSelecting()) return;
       if (quest.selectionUntil && !quest.items.some(v => durationErrors.has(v.id))) return;
       const previousDeadline = quest.selectionUntil;
       quest.selectionUntil = Date.now() + SELECTION_MS;
@@ -1219,7 +1245,7 @@
       shownCandidateIds.clear();
       render(true);
       scheduleDurations();
-      els.candidateHead.scrollIntoView({ behavior: 'auto', block: 'start' });
+      els.presetHead.scrollIntoView({ behavior: 'auto', block: 'start' });
     }
     function finishSelectionIfDue() {
       if (quest.phase !== 'planning' || !quest.selectionUntil || isSelecting()) return false;
@@ -1291,7 +1317,7 @@
         const origin = /^https?:$/.test(location.protocol) ? location.origin : undefined;
         player = new window.YT.Player('playerMount', {
           width: '100%', height: '100%',
-          playerVars: { playsinline: 1, autoplay: 1, rel: 0, origin },
+          playerVars: { playsinline: 1, autoplay: 1, controls: 0, disablekb: 1, rel: 0, origin },
           events: {
             onReady: event => {
               if (quest.phase !== 'running') { event.target.destroy(); return; }
@@ -1306,6 +1332,8 @@
             onStateChange: onPlayerState,
             onError: () => {
               hasPlayed = false;
+              els.pauseQuest.hidden = true;
+              els.seekForward.disabled = true;
               els.playerMessage.textContent = 'この動画を再生できません。同じ動画を再読み込みできます。';
               els.retryPlayer.hidden = false;
               els.resumeQuest.hidden = true;
@@ -1313,6 +1341,7 @@
             onAutoplayBlocked: () => {
               els.playerMessage.textContent = '自動再生が制限されました。再生を再開してください。';
               els.resumeQuest.hidden = false;
+              els.pauseQuest.hidden = true;
             }
           }
         });
@@ -1332,9 +1361,11 @@
       handledEnd = false;
       els.retryPlayer.hidden = true;
       els.resumeQuest.hidden = false;
+      els.pauseQuest.hidden = true;
+      els.seekForward.disabled = true;
       els.playerMessage.textContent = '';
       renderPhase();
-      player.loadVideoById({ videoId: quest.items[quest.index].id, startSeconds: Math.max(0, quest.checkpoint - 1) });
+      player.loadVideoById({ videoId: quest.items[quest.index].id, startSeconds: quest.checkpoint });
     }
     function onPlayerState(event) {
       if (!currentVideoMatches()) return;
@@ -1342,11 +1373,14 @@
         hasPlayed = true;
         els.playerMessage.textContent = '';
         els.resumeQuest.hidden = true;
+        els.pauseQuest.hidden = false;
+        els.seekForward.disabled = false;
         els.retryPlayer.hidden = true;
       } else if (event.data === 0) {
         finishCurrentVideo();
       } else if (event.data === 2) {
         els.resumeQuest.hidden = false;
+        els.pauseQuest.hidden = true;
         recordProgress(true);
       }
     }
@@ -1354,9 +1388,18 @@
       if (!hasPlayed || !currentVideoMatches()) return;
       const position = Number(player.getCurrentTime());
       if (!Number.isFinite(position) || position < 0) return;
-      quest.checkpoint = position;
+      quest.checkpoint = Math.max(quest.checkpoint, position);
       const now = Date.now();
       if (forceSave || now - lastProgressSave >= 4000) { saveQuest(); lastProgressSave = now; }
+    }
+    function seekForward() {
+      if (!hasPlayed || !currentVideoMatches()) return;
+      const position = Math.max(quest.checkpoint, player.getCurrentTime());
+      const target = Math.min(position + 10, player.getDuration() - 1);
+      if (!Number.isFinite(target) || target <= position) return;
+      quest.checkpoint = target;
+      player.seekTo(target, true);
+      saveQuest();
     }
     function advanceQuest() {
       if (quest.phase !== 'running' || quest.index + 1 >= quest.items.length) return false;
@@ -1639,6 +1682,7 @@
       const yearTo = Math.max(selectedFrom, selectedTo);
       const library = els.libraryFilter.value;
       const videos = availableVideos().filter(video => {
+        if (PRESET_VIDEOS.has(video.id)) return false;
         const yearMatch = video.year >= yearFrom && video.year <= yearTo;
         const queryMatch = !query || `${video.title}\n${video.description}`.toLowerCase().includes(query);
         const libraryMatch =
@@ -1684,10 +1728,12 @@
       window.clearTimeout(autoFetchTimer);
       if (shouldAutoFetch()) autoFetchTimer = window.setTimeout(fetchVideos, delay);
     }
-    els.grid.addEventListener('click', event => {
+    function selectFromButton(event) {
       const target = event.target.closest('[data-select]');
       if (target) selectVideo(target.dataset.select);
-    });
+    }
+    els.grid.addEventListener('click', selectFromButton);
+    els.presetList.addEventListener('click', selectFromButton);
     els.questList.addEventListener('click', event => {
       const target = event.target.closest('[data-queue]');
       if (target) changeQueue(target.dataset.id, target.dataset.queue);
@@ -1695,6 +1741,8 @@
     els.startQuest.addEventListener('click', () => isSelecting() ? startQuest() : beginSelection());
     els.playSelection.addEventListener('click', startQuest);
     els.resumeQuest.addEventListener('click', resumeQuest);
+    els.pauseQuest.addEventListener('click', () => { if (currentVideoMatches()) player.pauseVideo(); });
+    els.seekForward.addEventListener('click', seekForward);
     els.nextVideo.addEventListener('click', advanceQuest);
     els.retryPlayer.addEventListener('click', () => {
       if (quest.phase !== 'running') return;
