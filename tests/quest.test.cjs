@@ -149,7 +149,26 @@ async function main() {
   assert.equal(direct.get('quest.selectionUntil'), 0);
   assert.equal(direct.nodes.get('presetPanel').hidden, true);
   assert.equal(direct.nodes.get('nextVideo').hidden, true);
-  assert.equal(boot(new Map(direct.saved)).get('quest.phase'), 'running');
+  assert.equal(direct.nodes.get('backToPresets').hidden, false);
+  assert.equal(direct.nodes.get('watchPresets').hidden, false);
+  assert.equal(boot(new Map(direct.saved)).get('quest.presetMode'), true, 'Single preset mode survives reload');
+  direct.run(`quest.checkpoint=120;hasPlayed=true;playerReady=true;
+    player={id:'80mAjV1XUUc',pos:60,getVideoData(){return {video_id:this.id};},getCurrentTime(){return this.pos;},
+      loadVideoById(v){this.id=v.videoId;this.pos=v.startSeconds;},destroy(){this.destroyed=true;}};
+    recordProgress(true);`);
+  assert.equal(direct.get('quest.checkpoint'), 60, 'A single preset allows backward seeking');
+  assert.equal(direct.run('playPreset("VtKYjNo8IXI")'), true, 'An open preset can switch directly to another');
+  assert.equal(direct.get('player.id'), 'VtKYjNo8IXI');
+  assert.equal(direct.get('player.pos'), 0);
+  assert.equal(direct.run('backToPresets()'), true);
+  assert.equal(direct.get('player'), null);
+  assert.equal(direct.get('quest.phase'), 'planning');
+  assert.equal(direct.nodes.get('presetPanel').hidden, false);
+  assert.equal(direct.saved.has(LOCK), false, 'Returning early does not lock the site');
+  assert.equal(app.run('backToPresets()'), false, 'Cooldown cannot be dismissed');
+  assert.equal(presets.run('backToPresets()'), false, 'The selected queue cannot use preset navigation');
+  assert.equal(presets.run('playPreset("VtKYjNo8IXI")'), false);
+  direct.run('playPreset("VtKYjNo8IXI")');
   direct.run('beginCooldown()');
   assert.equal(direct.run('playPreset("VtKYjNo8IXI")'), false, 'Direct playback respects the cooldown');
   assert.equal(direct.get('quest.phase'), 'locked');
