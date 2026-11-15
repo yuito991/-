@@ -2,6 +2,7 @@ async page => {
   const check = (condition, message) => { if (!condition) throw new Error(message); };
   const first = 'VtKYjNo8IXI';
   const second = 'ZNWfZclu72c';
+  const workVideo = '80mAjV1XUUc';
   await page.clock.install();
   let dataApiCalls = 0;
   await page.route('**/www.googleapis.com/youtube/v3/**', route => { dataApiCalls++; return route.abort(); });
@@ -20,18 +21,18 @@ async page => {
         getCurrentTime(){return this.state===1?Math.min(this.getDuration(),(Date.now()-this.start)/1000):this.pos;}
         pauseVideo(){this.pos=this.getCurrentTime();this.state=2;clearTimeout(this.timer);this.events.onStateChange({data:2});}
         getPlayerState(){return this.state;}
-        getDuration(){return this.id==='${first}'?583:779;}
+        getDuration(){return {'${first}':583,'${second}':779,'${workVideo}':5403}[this.id];}
         seekTo(value){this.pos=value;if(this.state===1)this.playVideo();}
         destroy(){clearTimeout(this.timer);this.frame.remove();}
       }};window.onYouTubeIframeAPIReady();`
   }));
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('http://127.0.0.1:8876', { waitUntil: 'domcontentloaded' });
-  check(await page.locator('#presetList button:visible').count() === 3, 'Three presets shown before selection');
+  check(await page.locator('#presetList button:visible').count() === 4, 'Four presets shown before selection');
   check(await page.locator('#selectionDock').isHidden(), 'No timer until selection starts');
   await page.screenshot({ path: 'output/playwright/quest-mobile-presets.png' });
   await page.getByRole('button', { name: '選択スタート', exact: true }).click();
-  check(await page.locator('#presetList button').count() === 3, 'Three presets on a fresh browser without a key');
+  check(await page.locator('#presetList button').count() === 4, 'Four presets on a fresh browser without a key');
   await page.locator('#presetList [data-select="' + first + '"]').click();
   await page.locator('#presetList [data-select="' + second + '"]').click();
   await page.clock.runFor(500);
@@ -65,10 +66,11 @@ async page => {
   check(await page.locator('#cooldown').isHidden(), 'Lock expires');
   check(await page.locator('#catalog').isVisible(), 'Selection returns');
   check(await page.locator('iframe').count() === 0, 'No autoplay after unlock');
-  await page.locator('#presetList [data-select="' + second + '"]').click();
+  await page.locator('#presetList [data-select="' + workVideo + '"]').click();
   await page.clock.runFor(500);
   check(await page.locator('#watchArea').isVisible(), 'Preset opens immediately without selection');
   check(await page.locator('#playerProgress').innerText() === '1 / 1 本', 'Only the tapped video plays');
+  check(await page.locator('#playerMeta').innerText() === '1時間30分3秒', 'New preset shows its actual duration');
   check(await page.locator('#pauseQuest').isVisible(), 'Preset starts playing');
   check(await page.locator('#selectionDock').isHidden(), 'Direct playback skips the selection timer');
   check(dataApiCalls === 0, 'Preset selection and playback do not call the Data API');

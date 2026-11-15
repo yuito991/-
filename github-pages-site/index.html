@@ -800,7 +800,7 @@
     .candidate-head span { color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
     .candidate-actions { display: flex; align-items: center; gap: 12px; }
     .preset-panel { margin-bottom: 18px; }
-    .preset-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .preset-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(245px, 1fr)); gap: 8px; }
     .preset-button { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 10px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); text-align: left; }
     .preset-button img { width: 80px; aspect-ratio: 16/9; object-fit: cover; border-radius: 4px; }
     .preset-title { display: block; font-size: .9rem; font-weight: 700; overflow-wrap: anywhere; }
@@ -947,7 +947,8 @@
     const PRESET_VIDEOS = new Map([
       ['VtKYjNo8IXI', 'ぼっち大学生だったシルクの学校生活を、もう一度...', 583],
       ['ZNWfZclu72c', '【本気】超集中モードで８時間の動画を編集するシルクロード', 779],
-      ['ru_Bny5k-NY', '【仕事人】最速の編集者は何時間でメイン動画作り終えるのか！？', 852]
+      ['ru_Bny5k-NY', '【仕事人】最速の編集者は何時間でメイン動画作り終えるのか！？', 852],
+      ['80mAjV1XUUc', '【作業用】１時間半編集するんでシルクと一緒に頑張ろう。', 5403]
     ].map(([id, title, durationSeconds]) => [id, { id, title, durationSeconds, thumbnail: `https://i.ytimg.com/vi/${id}/hqdefault.jpg` }]));
     const els = Object.fromEntries([
       'app','planning','queueCount','totalDuration','finishTime','startQuest','queueNote',

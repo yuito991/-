@@ -128,7 +128,7 @@ async function main() {
   assert.equal(failed.run('parseDuration("PT0S")'), null);
 
   const presets = boot();
-  const presetIds = ['VtKYjNo8IXI', 'ZNWfZclu72c', 'ru_Bny5k-NY'];
+  const presetIds = ['VtKYjNo8IXI', 'ZNWfZclu72c', 'ru_Bny5k-NY', '80mAjV1XUUc'];
   assert.equal(presets.nodes.get('startQuest').disabled, false, 'Selection is available on a fresh install without a key');
   presets.run('fetch=async()=>{throw new Error("No API calls expected")};beginSelection()');
   for (const id of presetIds) {
@@ -137,15 +137,15 @@ async function main() {
   }
   await presets.run('loadDurations()');
   assert.deepEqual(presets.get('quest.items.map(v=>v.id)'), presetIds);
-  assert.equal(presets.nodes.get('totalDuration').textContent, '36分54秒');
+  assert.equal(presets.nodes.get('totalDuration').textContent, '2時間6分57秒');
   assert.equal(presets.nodes.get('retryDurations').hidden, true);
   assert.equal(presets.run('resumeQuest=()=>{};startQuest()'), true, 'Preset queue plays without an API key');
 
   const direct = boot();
   assert.equal(direct.nodes.get('presetPanel').hidden, false);
   assert.equal(direct.nodes.get('candidatePanel').hidden, true);
-  assert.equal(direct.run('resumeQuest=()=>{};playPreset("ZNWfZclu72c")'), true);
-  assert.deepEqual(direct.get('quest.items.map(v=>v.id)'), ['ZNWfZclu72c']);
+  assert.equal(direct.run('resumeQuest=()=>{};playPreset("80mAjV1XUUc")'), true);
+  assert.deepEqual(direct.get('quest.items.map(v=>[v.id,v.durationSeconds])'), [['80mAjV1XUUc', 5403]]);
   assert.equal(direct.get('quest.selectionUntil'), 0);
   assert.equal(direct.nodes.get('presetPanel').hidden, true);
   assert.equal(direct.nodes.get('nextVideo').hidden, true);
