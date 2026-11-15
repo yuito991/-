@@ -48,6 +48,7 @@ async page => {
   check(await page.locator('#playerProgress').innerText() === '1 / 2 本', 'First video');
   check(await page.evaluate(() => window.testPlayerVars.controls === 0 && window.testPlayerVars.disablekb === 1), 'YouTube seek bar and keyboard shortcuts are disabled');
   check(await page.locator('#backToPresets').isHidden() && await page.locator('#watchPresets').isHidden(), 'Preset navigation is unavailable in the queue');
+  check(await page.locator('#presetTimer').isHidden(), 'Pause timer is unavailable in the queue');
   await page.locator('#pauseQuest').click();
   const checkpoint = () => page.evaluate(() => JSON.parse(localStorage.getItem('fischersQuestV1')).checkpoint);
   const pausedAt = await checkpoint();
@@ -77,18 +78,29 @@ async page => {
   check(await page.evaluate(() => window.testPlayerVars.controls === 1 && window.testPlayerVars.disablekb === 0), 'Direct presets use normal YouTube seeking');
   check(await page.locator('#watchPresetList button:visible').count() === 4, 'Preset choices remain available while playing');
   check(await page.locator('#watchPresetList [data-select="' + workVideo + '"]').isDisabled(), 'Current preset is marked');
+  await page.locator('#presetTimerMinutes').fill('1');
+  await page.locator('#presetTimerStart').click();
+  check(await page.locator('#presetTimerRemaining').isVisible(), 'Pause timer shows remaining time');
   await page.screenshot({ path: 'output/playwright/quest-mobile-preset-player.png' });
   await page.locator('#watchPresetList [data-select="' + second + '"]').click();
   check(await page.locator('#playerMeta').innerText() === '12分59秒', 'Switches to a different preset');
   check(await page.locator('iframe').count() === 1, 'Only one player after switching');
   await page.reload({ waitUntil: 'domcontentloaded' });
   check(await page.locator('#backToPresets').isVisible(), 'Preset navigation remains after reload');
+  check(await page.locator('#presetTimerCancel').isVisible(), 'Pause timer survives switching and reload');
   await page.locator('#resumeQuest').click();
   await page.clock.runFor(500);
   await page.locator('iframe').waitFor();
+  await page.clock.runFor(60000);
+  check(await page.locator('#presetTimerStatus').innerText() === 'タイマー終了', 'Timer expires automatically');
+  check(await page.locator('#resumeQuest').isVisible() && await page.locator('#pauseQuest').isHidden(), 'Timer paused playback');
+  await page.locator('#resumeQuest').click();
+  await page.clock.fastForward(779000);
+  check(await page.locator('#playerMessage').innerText() === '再生が終了しました。', 'Preset finished normally');
+  check(await page.locator('#cooldown').isHidden() && await page.locator('#watchPresets').isVisible(), 'Presets stay available without a cooldown');
   await page.locator('#backToPresets').click();
   check(await page.locator('#presetPanel').isVisible() && await page.locator('#watchArea').isHidden(), 'Back returns to the list');
   check(await page.locator('iframe').count() === 0 && await page.locator('#cooldown').isHidden(), 'Back stops playback and does not lock');
   check(dataApiCalls === 0, 'Preset selection and playback do not call the Data API');
-  console.log('PASS browser: direct preset seeking, switching and back; timed queue and cooldown');
+  console.log('PASS browser: preset pause timer and unrestricted completion; ordinary queue cooldown');
 }

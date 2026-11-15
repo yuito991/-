@@ -151,16 +151,39 @@ async function main() {
   assert.equal(direct.nodes.get('nextVideo').hidden, true);
   assert.equal(direct.nodes.get('backToPresets').hidden, false);
   assert.equal(direct.nodes.get('watchPresets').hidden, false);
+  assert.equal(direct.nodes.get('presetTimer').hidden, false);
   assert.equal(boot(new Map(direct.saved)).get('quest.presetMode'), true, 'Single preset mode survives reload');
   direct.run(`quest.checkpoint=120;hasPlayed=true;playerReady=true;
-    player={id:'80mAjV1XUUc',pos:60,getVideoData(){return {video_id:this.id};},getCurrentTime(){return this.pos;},
+    player={id:'80mAjV1XUUc',pos:60,state:1,pauses:0,getVideoData(){return {video_id:this.id};},getCurrentTime(){return this.pos;},
+      getPlayerState(){return this.state;},pauseVideo(){this.state=2;this.pauses++;},
       loadVideoById(v){this.id=v.videoId;this.pos=v.startSeconds;},destroy(){this.destroyed=true;}};
     recordProgress(true);`);
   assert.equal(direct.get('quest.checkpoint'), 60, 'A single preset allows backward seeking');
+  assert.equal(direct.run('setPresetTimer(0)'), false);
+  assert.equal(direct.run('setPresetTimer(1)'), true);
+  const pauseAt = direct.get('quest.presetPauseAt');
+  assert.equal(boot(new Map(direct.saved)).get('quest.presetPauseAt'), pauseAt);
+  direct.advance(59000);
+  direct.run('tick()');
+  assert.equal(direct.nodes.get('presetTimerRemaining').textContent, '残り 00:01');
+  assert.equal(direct.get('player.pauses'), 0);
   assert.equal(direct.run('playPreset("VtKYjNo8IXI")'), true, 'An open preset can switch directly to another');
   assert.equal(direct.get('player.id'), 'VtKYjNo8IXI');
   assert.equal(direct.get('player.pos'), 0);
+  assert.equal(direct.get('quest.presetPauseAt'), pauseAt, 'Switching keeps the original deadline');
+  direct.advance(1000);
+  direct.run('tick();tick()');
+  assert.equal(direct.get('player.pauses'), 1, 'The timer pauses once, on expiry');
+  assert.equal(direct.get('quest.presetPauseAt'), 0);
+  direct.run('hasPlayed=true;finishCurrentVideo()');
+  assert.equal(direct.get('quest.phase'), 'running', 'Finishing a preset never locks the site');
+  assert.equal(direct.saved.has(LOCK), false);
+  assert.equal(direct.run('playPreset("ZNWfZclu72c")'), true, 'Another preset can play immediately after the end');
+  direct.run('setPresetTimer(1);cancelPresetTimer();');
+  assert.equal(direct.get('quest.presetPauseAt'), 0, 'Cancel removes the timer');
+  direct.run('setPresetTimer(1)');
   assert.equal(direct.run('backToPresets()'), true);
+  assert.equal(direct.get('quest.presetPauseAt'), 0, 'Returning to the list clears the timer');
   assert.equal(direct.get('player'), null);
   assert.equal(direct.get('quest.phase'), 'planning');
   assert.equal(direct.nodes.get('presetPanel').hidden, false);
@@ -168,10 +191,8 @@ async function main() {
   assert.equal(app.run('backToPresets()'), false, 'Cooldown cannot be dismissed');
   assert.equal(presets.run('backToPresets()'), false, 'The selected queue cannot use preset navigation');
   assert.equal(presets.run('playPreset("VtKYjNo8IXI")'), false);
-  direct.run('playPreset("VtKYjNo8IXI")');
-  direct.run('beginCooldown()');
-  assert.equal(direct.run('playPreset("VtKYjNo8IXI")'), false, 'Direct playback respects the cooldown');
-  assert.equal(direct.get('quest.phase'), 'locked');
+  assert.equal(presets.run('setPresetTimer(1)'), false, 'Only direct presets have a pause timer');
+  assert.equal(app.run('playPreset("VtKYjNo8IXI")'), false, 'Direct presets cannot bypass an existing queue cooldown');
   assert.ok(app.saved.has(KEY));
   console.log('PASS: selection, duration API, seeking/resume, next button, automatic advance, duplicate ends, cooldown, expiry');
 }

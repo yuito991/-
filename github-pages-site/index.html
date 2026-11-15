@@ -820,6 +820,10 @@
     .player-progress { margin: 0; color: var(--accent); font-size: .9rem; font-weight: 800; }
     .player-message { color: var(--muted); padding: 8px 0; min-height: 1.5em; }
     .resume-row { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; }
+    .preset-timer { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+    .preset-timer label { font-size: .9rem; font-weight: 700; }
+    .preset-timer .input { width: 76px; min-height: 42px; }
+    .preset-timer output { color: var(--muted); font-size: .9rem; font-variant-numeric: tabular-nums; }
     .cooldown { position: fixed; inset: 0; z-index: 100; display: grid; align-content: center; justify-items: center; gap: 18px; padding: 24px; background: #000; color: #eee; text-align: center; }
     .cooldown h2 { font-size: 1.2rem; margin: 0; font-weight: 600; }
     .cooldown-time { font-size: 3rem; font-variant-numeric: tabular-nums; margin: 0; }
@@ -884,6 +888,14 @@
         <button class="button secondary" id="nextVideo" type="button" hidden>次の動画へ</button>
         <button class="button secondary" id="backToPresets" type="button" hidden>一覧に戻る</button>
       </div>
+      <form class="preset-timer" id="presetTimer" hidden>
+        <label for="presetTimerMinutes">一時停止タイマー（分）</label>
+        <input class="input" id="presetTimerMinutes" type="number" inputmode="numeric" min="1" max="1440" step="1" value="30" required>
+        <button class="button secondary" id="presetTimerStart" type="submit">セット</button>
+        <button class="button secondary" id="presetTimerCancel" type="button" hidden>解除</button>
+        <output id="presetTimerRemaining" role="timer" hidden></output>
+        <output id="presetTimerStatus" role="status"></output>
+      </form>
       <section class="preset-panel" id="watchPresets" hidden aria-labelledby="watchPresetHeading">
         <div class="candidate-head"><h2 id="watchPresetHeading">定番の動画</h2></div>
         <div class="preset-list" id="watchPresetList"></div>
@@ -961,7 +973,8 @@
       'yearFrom','yearTo','libraryFilter','grid','empty','errorBox','candidateCount','refreshCandidates',
       'candidatePanel','candidateHead','presetPanel','presetHead','presetHeading','presetList','selectionDock','selectionTime','refreshCandidatesBottom','playSelection',
       'watchArea','playerProgress','playerTitle','playerMeta','playerMessage','resumeQuest',
-      'pauseQuest','seekForward','retryPlayer','nextVideo','backToPresets','watchPresets','watchPresetList','cooldown','lockTitle','lockRemaining','unlockTime'
+      'pauseQuest','seekForward','retryPlayer','nextVideo','backToPresets','watchPresets','watchPresetList','cooldown','lockTitle','lockRemaining','unlockTime',
+      'presetTimer','presetTimerMinutes','presetTimerStart','presetTimerCancel','presetTimerRemaining','presetTimerStatus'
     ].map(id => [id, document.getElementById(id)]));
     let allVideos = [];
     let candidateIds = [];
@@ -1002,7 +1015,7 @@
       } catch { showError('視聴状態を保存できません。ブラウザの保存容量を確認してください。'); }
     }
     function emptyQuest() {
-      return { phase: 'planning', items: [], index: 0, checkpoint: 0, lockedUntil: 0, selectionUntil: 0, presetMode: false };
+      return { phase: 'planning', items: [], index: 0, checkpoint: 0, lockedUntil: 0, selectionUntil: 0, presetMode: false, presetPauseAt: 0 };
     }
     function readQuest() {
       try {
@@ -1016,8 +1029,10 @@
         const running = data.phase === 'running' && items.length && items.every(v => v.durationSeconds > 0)
           && Number.isInteger(data.index) && data.index >= 0 && data.index < items.length;
         const selectionUntil = Number(data.selectionUntil);
+        const presetMode = Boolean(running && data.presetMode === true && items.length === 1 && PRESET_VIDEOS.has(items[0].id));
+        const presetPauseAt = Number(data.presetPauseAt);
         return { ...emptyQuest(), items, phase: running ? 'running' : 'planning',
-          presetMode: Boolean(running && data.presetMode === true && items.length === 1 && PRESET_VIDEOS.has(items[0].id)),
+          presetMode, presetPauseAt: presetMode && Number.isFinite(presetPauseAt) && presetPauseAt > 0 ? presetPauseAt : 0,
           selectionUntil: !running && Number.isFinite(selectionUntil) && selectionUntil > 0 ? selectionUntil : 0,
           index: running ? data.index : 0, checkpoint: running ? Math.max(0, Math.min(Number(data.checkpoint) || 0, items[data.index].durationSeconds)) : 0 };
       } catch { return emptyQuest(); }
@@ -1225,9 +1240,51 @@
         if (quest.items.some(v => !v.durationSeconds && !durationErrors.has(v.id))) scheduleDurations();
       }
     }
+    function isPresetPlayback() {
+      return quest.phase === 'running' && quest.presetMode;
+    }
+    function renderPresetTimer() {
+      const active = isPresetPlayback() && quest.presetPauseAt > 0;
+      els.presetTimerMinutes.disabled = active;
+      els.presetTimerStart.hidden = active;
+      els.presetTimerCancel.hidden = !active;
+      els.presetTimerRemaining.hidden = !active;
+      if (!active) return;
+      const seconds = Math.max(0, Math.ceil((quest.presetPauseAt - Date.now()) / 1000));
+      const parts = [Math.floor(seconds % 3600 / 60), seconds % 60];
+      if (seconds >= 3600) parts.unshift(Math.floor(seconds / 3600));
+      els.presetTimerRemaining.textContent = '残り ' + parts.map(part => String(part).padStart(2, '0')).join(':');
+    }
+    function setPresetTimer(minutes) {
+      if (!isPresetPlayback() || quest.presetPauseAt || !Number.isInteger(minutes) || minutes < 1 || minutes > 1440) return false;
+      quest.presetPauseAt = Date.now() + minutes * 60000;
+      if (!saveQuest()) { quest.presetPauseAt = 0; return false; }
+      els.presetTimerStatus.textContent = '';
+      renderPresetTimer();
+      return true;
+    }
+    function cancelPresetTimer() {
+      if (!isPresetPlayback() || !quest.presetPauseAt) return;
+      quest.presetPauseAt = 0;
+      saveQuest();
+      renderPresetTimer();
+    }
+    function updatePresetTimer() {
+      if (!isPresetPlayback() || !quest.presetPauseAt) return;
+      if (Date.now() >= quest.presetPauseAt) {
+        const state = currentVideoMatches() ? player.getPlayerState() : null;
+        if ([0, 1, 2, 3].includes(state) || (!player && !loadingPlayer)) {
+          quest.presetPauseAt = 0;
+          saveQuest();
+          if (state === 1 || state === 3) player.pauseVideo();
+          els.presetTimerStatus.textContent = 'タイマー終了';
+        }
+      }
+      renderPresetTimer();
+    }
     function renderPhase() {
       const locked = quest.phase === 'locked' && quest.lockedUntil > Date.now();
-      const watchingPreset = quest.phase === 'running' && quest.presetMode;
+      const watchingPreset = isPresetPlayback();
       document.body.classList.toggle('site-locked', locked);
       els.cooldown.hidden = !locked;
       els.app.inert = locked;
@@ -1237,6 +1294,8 @@
       els.watchArea.hidden = quest.phase !== 'running';
       els.backToPresets.hidden = !watchingPreset;
       els.watchPresets.hidden = !watchingPreset;
+      els.presetTimer.hidden = !watchingPreset;
+      if (watchingPreset) renderPresetTimer();
       els.nextVideo.hidden = quest.phase !== 'running' || quest.index + 1 >= quest.items.length;
       renderSelectionControls(isSelecting());
       if (locked) {
@@ -1286,7 +1345,7 @@
       const canStart = quest.phase === 'planning' && !quest.selectionUntil;
       const canSwitch = quest.phase === 'running' && quest.presetMode && quest.items[quest.index].id !== id;
       if (!video || (!canStart && !canSwitch)) return false;
-      return startPlayback([{ ...video }], true);
+      return startPlayback([{ ...video }], true, canSwitch ? quest.presetPauseAt : 0);
     }
     function backToPresets() {
       if (quest.phase !== 'running' || !quest.presetMode) return false;
@@ -1303,12 +1362,13 @@
       scheduleAutoFetch();
       return true;
     }
-    function startPlayback(items, presetMode = false) {
+    function startPlayback(items, presetMode = false, presetPauseAt = 0) {
       if (!items.length || items.some(v => !v.durationSeconds)) return false;
       const previousQuest = quest;
-      quest = { ...emptyQuest(), phase: 'running', items, presetMode };
+      quest = { ...emptyQuest(), phase: 'running', items, presetMode, presetPauseAt };
       if (!saveQuest()) { quest = previousQuest; return false; }
       showError('');
+      els.presetTimerStatus.textContent = '';
       renderPhase();
       els.watchArea.scrollIntoView({ behavior:'auto', block:'start' });
       if (playerReady) loadCurrentVideo();
@@ -1347,7 +1407,8 @@
       if (quest.phase !== 'running' || loadingPlayer) return;
       if (player && !playerReady) return;
       if (playerReady && player) {
-        player.playVideo();
+        if (quest.presetMode && handledEnd) loadCurrentVideo();
+        else player.playVideo();
         return;
       }
       loadingPlayer = true;
@@ -1413,11 +1474,13 @@
       if (!currentVideoMatches()) return;
       if (event.data === 1) {
         hasPlayed = true;
+        if (quest.presetMode) handledEnd = false;
         els.playerMessage.textContent = '';
         els.resumeQuest.hidden = true;
         els.pauseQuest.hidden = false;
         els.seekForward.disabled = false;
         els.retryPlayer.hidden = true;
+        updatePresetTimer();
       } else if (event.data === 0) {
         finishCurrentVideo();
       } else if (event.data === 2) {
@@ -1458,6 +1521,16 @@
       handledEnd = true;
       state.watched.add(quest.items[quest.index].id);
       saveState();
+      if (quest.presetMode) {
+        hasPlayed = false;
+        quest.checkpoint = 0;
+        saveQuest();
+        els.resumeQuest.hidden = false;
+        els.pauseQuest.hidden = true;
+        els.seekForward.disabled = true;
+        els.playerMessage.textContent = '再生が終了しました。';
+        return;
+      }
       if (!advanceQuest()) beginCooldown();
     }
     function destroyPlayer() {
@@ -1473,7 +1546,7 @@
       }
     }
     function beginCooldown() {
-      if (quest.phase !== 'running') return;
+      if (quest.phase !== 'running' || quest.presetMode) return;
       quest = { ...emptyQuest(), phase:'locked', lockedUntil: Date.now() + COOLDOWN_MS };
       try { localStorage.setItem(LOCK_KEY, String(quest.lockedUntil)); } catch {}
       saveQuest();
@@ -1494,6 +1567,7 @@
           scheduleAutoFetch();
         } else renderPhase();
       } else if (quest.phase === 'running') {
+        updatePresetTimer();
         if (playerReady && player?.getPlayerState?.() === 1) {
           if (!currentVideoMatches()) loadCurrentVideo();
           else recordProgress();
@@ -1797,6 +1871,11 @@
     els.seekForward.addEventListener('click', seekForward);
     els.nextVideo.addEventListener('click', advanceQuest);
     els.backToPresets.addEventListener('click', backToPresets);
+    els.presetTimer.addEventListener('submit', event => {
+      event.preventDefault();
+      setPresetTimer(Number(els.presetTimerMinutes.value));
+    });
+    els.presetTimerCancel.addEventListener('click', cancelPresetTimer);
     els.retryPlayer.addEventListener('click', () => {
       if (quest.phase !== 'running') return;
       destroyPlayer();
