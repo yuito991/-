@@ -117,14 +117,29 @@ async function main() {
   assert.equal(app.nodes.get('lockRemaining').textContent, '30:00');
   assert.equal(app.get('player'), null, 'No hidden player continues during lock');
   assert.equal(app.get('quest.lockedUntil-Date.now()'), 1800000);
-  const locked = boot(app.saved);
+  const locked = boot(new Map(app.saved));
   assert.equal(locked.get('quest.phase'), 'locked', 'Lock persists across reload');
-  locked.run('startQuest()');
+  assert.equal(locked.nodes.get('presetPanel').hidden, false);
+  assert.equal(locked.nodes.get('planning').hidden, true);
+  locked.run('beginSelection();startQuest();');
   assert.equal(locked.get('quest.phase'), 'locked');
+  const deadline = locked.get('quest.lockedUntil');
+  locked.run('resumeQuest=()=>{}');
+  assert.equal(locked.run('playPreset("VtKYjNo8IXI")'), true, 'A direct preset can play during cooldown');
+  assert.equal(locked.get('quest.lockedUntil'), deadline);
+  const lockedPreset = boot(new Map(locked.saved));
+  assert.equal(lockedPreset.get('quest.presetMode'), true, 'Reload keeps the preset open during cooldown');
+  assert.equal(lockedPreset.get('quest.lockedUntil'), deadline);
+  assert.equal(lockedPreset.run('backToPresets()'), true);
+  assert.equal(lockedPreset.get('quest.phase'), 'locked', 'Closing a preset restores the lock screen');
+  assert.equal(lockedPreset.get('quest.lockedUntil'), deadline, 'Closing does not reset the timer');
   locked.advance(1800001);
   locked.run('tick()');
-  assert.equal(locked.get('quest.phase'), 'planning');
+  assert.equal(locked.get('quest.phase'), 'running', 'Cooldown expires without interrupting a preset');
+  assert.equal(locked.get('quest.lockedUntil'), 0);
   assert.equal(locked.saved.has(LOCK), false);
+  locked.run('backToPresets()');
+  assert.equal(locked.get('quest.phase'), 'planning');
 
   const failed = boot();
   failed.run('allVideos=' + JSON.stringify(fixtures));
@@ -136,23 +151,15 @@ async function main() {
   assert.equal(failed.run('parseDuration("P1DT2H3M4S")'), 93784);
   assert.equal(failed.run('parseDuration("PT0S")'), null);
 
-  const presets = boot();
-  const presetIds = ['VtKYjNo8IXI', 'ZNWfZclu72c', 'ru_Bny5k-NY', '80mAjV1XUUc'];
-  assert.equal(presets.nodes.get('startQuest').disabled, false, 'Selection is available on a fresh install without a key');
-  presets.run('fetch=async()=>{throw new Error("No API calls expected")};beginSelection()');
-  for (const id of presetIds) {
-    assert.ok(presets.nodes.get('presetList').innerHTML.includes(id));
-    presets.run('selectVideo(' + JSON.stringify(id) + ')');
-  }
-  await presets.run('loadDurations()');
-  assert.deepEqual(presets.get('quest.items.map(v=>v.id)'), presetIds);
-  assert.equal(presets.nodes.get('totalDuration').textContent, '2時間6分57秒');
-  assert.equal(presets.nodes.get('retryDurations').hidden, true);
-  assert.equal(presets.run('resumeQuest=()=>{};startQuest()'), true, 'Preset queue plays without an API key');
+  const regular = boot(new Map(automatic.saved));
+  assert.equal(regular.run('backToPresets()'), false, 'The selected queue cannot use preset navigation');
+  assert.equal(regular.run('playPreset("VtKYjNo8IXI")'), false);
+  assert.equal(regular.run('setPresetTimer(1)'), false, 'Only direct presets have a pause timer');
 
   const direct = boot();
   assert.equal(direct.nodes.get('presetPanel').hidden, false);
   assert.equal(direct.nodes.get('candidatePanel').hidden, true);
+  assert.equal(direct.nodes.get('startQuest').disabled, true, 'No regular selection without an archive');
   assert.equal(direct.run('resumeQuest=()=>{};playPreset("80mAjV1XUUc")'), true);
   assert.deepEqual(direct.get('quest.items.map(v=>[v.id,v.durationSeconds])'), [['80mAjV1XUUc', 5403]]);
   assert.equal(direct.get('quest.selectionUntil'), 0);
@@ -200,10 +207,6 @@ async function main() {
   assert.equal(direct.nodes.get('presetPanel').hidden, false);
   assert.equal(direct.saved.has(LOCK), false, 'Returning early does not lock the site');
   assert.equal(app.run('backToPresets()'), false, 'Cooldown cannot be dismissed');
-  assert.equal(presets.run('backToPresets()'), false, 'The selected queue cannot use preset navigation');
-  assert.equal(presets.run('playPreset("VtKYjNo8IXI")'), false);
-  assert.equal(presets.run('setPresetTimer(1)'), false, 'Only direct presets have a pause timer');
-  assert.equal(app.run('playPreset("VtKYjNo8IXI")'), false, 'Direct presets cannot bypass an existing queue cooldown');
   assert.ok(app.saved.has(KEY));
   console.log('PASS: selection, duration API, seeking/resume, next button, automatic advance, duplicate ends, cooldown, expiry');
 }

@@ -22,7 +22,7 @@ async page => {
   await page.route('https://i.ytimg.com/**', route => route.fulfill({
     contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270"><rect width="480" height="270" fill="#164e63"/><rect x="190" y="85" width="100" height="100" rx="8" fill="#0ea5e9"/><path d="M225 110v50l38-25z" fill="white"/></svg>'
   }));
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 320, height: 480 });
   await page.clock.install();
   await page.goto('http://127.0.0.1:8876', { waitUntil: 'domcontentloaded' });
   console.log((await page.locator('body').innerText()).slice(0, 400));
@@ -32,10 +32,21 @@ async page => {
   await page.getByRole('button', { name: '選択スタート', exact: true }).click();
   const initial = await ids();
   check(initial.length === 5, 'Starts with five candidates');
-  await page.clock.runFor(5000);
+  check(await page.locator('#presetPanel').isHidden(), 'Presets are hidden during timed selection');
+  const fits = () => page.evaluate(() => {
+    const dockTop = document.getElementById('selectionDock').getBoundingClientRect().top;
+    return [...document.querySelectorAll('#grid .card')].every(card => {
+      const rect = card.getBoundingClientRect();
+      return rect.top >= 0 && rect.bottom <= dockTop && rect.right <= innerWidth;
+    });
+  });
+  check(await fits(), 'All five cards fit above the dock on a short phone');
+  await page.screenshot({ path: 'output/playwright/candidates-mobile-compact.png' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  check(await fits(), 'All five cards fit on a typical phone');
+  await page.clock.runFor(1000);
   const deadline = () => page.evaluate(() => JSON.parse(localStorage.getItem('fischersQuestV1')).selectionUntil);
   const initialDeadline = await deadline();
-  await page.evaluate(() => scrollTo(0, document.documentElement.scrollHeight));
   const bottomRefresh = page.locator('#refreshCandidatesBottom');
   const bounds = await bottomRefresh.boundingBox();
   check(bounds && bounds.y >= 0 && bounds.y + bounds.height <= 844, 'Mobile reroll stays visible at the bottom');
@@ -56,9 +67,10 @@ async page => {
   check(await page.locator('#queueCount').innerText() === '2本', 'Two selected');
   check(await page.locator('#totalDuration').innerText() === '4分0秒', 'Total unchanged behavior');
   check((await ids()).every(id => !chosen.includes(id)), 'Selected candidates excluded');
-  await page.getByRole('button', { name: '候補を入れ替える', exact: true }).click();
+  await bottomRefresh.click();
   check((await ids()).length === 5, 'Refresh keeps five');
   check(await page.locator('#queueCount').innerText() === '2本', 'Refresh preserves queue');
+  check(await page.locator('#selectionSummary').innerText() === '2本 · 4分0秒', 'Dock shows the selected count and duration');
   check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Mobile width fits');
   await page.screenshot({ path: 'output/playwright/candidates-mobile.png', fullPage: true });
   await page.setViewportSize({ width: 1366, height: 900 });

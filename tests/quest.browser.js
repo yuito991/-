@@ -1,9 +1,20 @@
 async page => {
   const check = (condition, message) => { if (!condition) throw new Error(message); };
-  const first = 'VtKYjNo8IXI';
-  const second = 'ZNWfZclu72c';
+  const first = 'aaaaaaaaaaa';
+  const second = 'bbbbbbbbbbb';
+  const secondPreset = 'ZNWfZclu72c';
   const workVideo = '80mAjV1XUUc';
   await page.clock.install();
+  await page.addInitScript(({ first, second }) => {
+    localStorage.setItem('fischers2017ViewerCacheV5', JSON.stringify({
+      videos: [
+        { id: first, title: '通常の候補 A', durationSeconds: 583 },
+        { id: second, title: '通常の候補 B', durationSeconds: 779 }
+      ].map(video => ({ ...video, publishedAt: '2024-01-01T00:00:00Z' })),
+      archiveComplete: true,
+      savedAt: new Date().toISOString()
+    }));
+  }, { first, second });
   let dataApiCalls = 0;
   await page.route('**/www.googleapis.com/youtube/v3/**', route => { dataApiCalls++; return route.abort(); });
   await page.route('**/www.youtube.com/iframe_api', route => route.fulfill({
@@ -21,7 +32,7 @@ async page => {
         getCurrentTime(){return this.state===1?Math.min(this.getDuration(),(Date.now()-this.start)/1000):this.pos;}
         pauseVideo(){this.pos=this.getCurrentTime();this.state=2;clearTimeout(this.timer);this.events.onStateChange({data:2});}
         getPlayerState(){return this.state;}
-        getDuration(){return {'${first}':583,'${second}':779,'${workVideo}':5403}[this.id];}
+        getDuration(){return {'${first}':583,'${second}':779,'${secondPreset}':779,'${workVideo}':5403}[this.id];}
         seekTo(value){this.pos=value;if(this.state===1)this.playVideo();}
         destroy(){clearTimeout(this.timer);this.frame.remove();}
       }};window.onYouTubeIframeAPIReady();`
@@ -32,9 +43,9 @@ async page => {
   check(await page.locator('#selectionDock').isHidden(), 'No timer until selection starts');
   await page.screenshot({ path: 'output/playwright/quest-mobile-presets.png' });
   await page.getByRole('button', { name: '選択スタート', exact: true }).click();
-  check(await page.locator('#presetList button').count() === 4, 'Four presets on a fresh browser without a key');
-  await page.locator('#presetList [data-select="' + first + '"]').click();
-  await page.locator('#presetList [data-select="' + second + '"]').click();
+  check(await page.locator('#presetPanel').isHidden(), 'Presets are hidden during normal selection');
+  await page.locator('#grid .thumb-btn[data-select="' + first + '"]').click();
+  await page.locator('#grid .thumb-btn[data-select="' + second + '"]').click();
   await page.clock.runFor(500);
   check(await page.locator('#totalDuration').innerText() === '22分42秒', 'Total duration without a key');
   check(await page.locator('#playSelection').isEnabled(), 'Manual play is available before time runs out');
@@ -62,13 +73,13 @@ async page => {
   await page.getByRole('button', { name: '視聴を終了', exact: true }).click();
   check(await page.locator('#cooldown').isVisible(), 'Finish button locks immediately during the last video');
   check(await page.locator('iframe').count() === 0, 'No hidden player');
+  check(await page.locator('#planning').isHidden() && await page.locator('#catalog').isHidden(), 'Normal viewing stays locked');
+  check(await page.locator('#presetList button:visible').count() === 4, 'Locked screen still offers the presets');
+  const lockUntil = () => page.evaluate(() => localStorage.getItem('fischersQuestLockUntilV1'));
+  const originalLock = await lockUntil();
   await page.screenshot({ path: 'output/playwright/quest-mobile-locked.png' });
   await page.reload();
   check(await page.locator('#cooldown').isVisible(), 'Lock survives reload');
-  await page.clock.runFor(1801000);
-  check(await page.locator('#cooldown').isHidden(), 'Lock expires');
-  check(await page.locator('#catalog').isVisible(), 'Selection returns');
-  check(await page.locator('iframe').count() === 0, 'No autoplay after unlock');
   await page.locator('#presetList [data-select="' + workVideo + '"]').click();
   await page.clock.runFor(500);
   check(await page.locator('#watchArea').isVisible(), 'Preset opens immediately without selection');
@@ -84,11 +95,12 @@ async page => {
   await page.locator('#presetTimerStart').click();
   check(await page.locator('#presetTimerRemaining').isVisible(), 'Pause timer shows remaining time');
   await page.screenshot({ path: 'output/playwright/quest-mobile-preset-player.png' });
-  await page.locator('#watchPresetList [data-select="' + second + '"]').click();
+  await page.locator('#watchPresetList [data-select="' + secondPreset + '"]').click();
   check(await page.locator('#playerMeta').innerText() === '12分59秒', 'Switches to a different preset');
   check(await page.locator('iframe').count() === 1, 'Only one player after switching');
   await page.reload({ waitUntil: 'domcontentloaded' });
   check(await page.locator('#backToPresets').isVisible(), 'Preset navigation remains after reload');
+  check(await page.locator('#cooldown').isVisible() && await lockUntil() === originalLock, 'Preset reload keeps the original cooldown');
   check(await page.locator('#presetTimerCancel').isVisible(), 'Pause timer survives switching and reload');
   await page.locator('#resumeQuest').click();
   await page.clock.runFor(500);
@@ -99,10 +111,16 @@ async page => {
   await page.locator('#resumeQuest').click();
   await page.clock.fastForward(779000);
   check(await page.locator('#playerMessage').innerText() === '再生が終了しました。', 'Preset finished normally');
-  check(await page.locator('#cooldown').isHidden() && await page.locator('#watchPresets').isVisible(), 'Presets stay available without a cooldown');
+  check(await page.locator('#watchPresets').isVisible() && await lockUntil() === originalLock, 'Finishing a preset does not extend the cooldown');
   await page.locator('#backToPresets').click();
   check(await page.locator('#presetPanel').isVisible() && await page.locator('#watchArea').isHidden(), 'Back returns to the list');
-  check(await page.locator('iframe').count() === 0 && await page.locator('#cooldown').isHidden(), 'Back stops playback and does not lock');
+  check(await page.locator('iframe').count() === 0 && await page.locator('#cooldown').isVisible(), 'Back stops the preset and keeps the original lock');
+  await page.locator('#presetList [data-select="' + workVideo + '"]').click();
+  await page.clock.runFor(500);
+  await page.clock.fastForward(1801000);
+  check(await page.locator('#cooldown').isHidden() && await page.locator('#pauseQuest').isVisible(), 'Cooldown expires without stopping playback');
+  await page.locator('#backToPresets').click();
+  check(await page.locator('#catalog').isVisible() && await page.locator('#startQuest').isEnabled(), 'Ordinary selection is available again');
   check(dataApiCalls === 0, 'Preset selection and playback do not call the Data API');
   console.log('PASS browser: preset pause timer and unrestricted completion; ordinary queue cooldown');
 }

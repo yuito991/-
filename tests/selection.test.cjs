@@ -12,6 +12,9 @@ async function main() {
   const app = setup();
   assert.equal(app.nodes.get('candidatePanel').hidden, true);
   app.run('selectVideo("aaaaaaaaaaa");beginSelection()');
+  assert.equal(app.nodes.get('presetPanel').hidden, true, 'Presets are hidden during selection');
+  app.run('selectVideo("VtKYjNo8IXI")');
+  assert.equal(app.run('playPreset("VtKYjNo8IXI")'), false, 'Preset playback cannot interrupt selection');
   assert.deepEqual(app.get('quest.items'), []);
   assert.equal(app.nodes.get('selectionTime').textContent, '00:10');
   const deadline = JSON.parse(app.saved.get(KEY)).selectionUntil;
@@ -30,6 +33,7 @@ async function main() {
   assert.equal(reloaded.get('quest.phase'), 'planning');
   assert.deepEqual(reloaded.get('quest.items'), []);
   assert.equal(reloaded.nodes.get('selectionDock').hidden, true);
+  assert.equal(reloaded.nodes.get('presetPanel').hidden, false);
   assert.equal(reloaded.nodes.get('startQuest').disabled, false);
   reloaded.run('beginSelection()');
   assert.equal(reloaded.nodes.get('selectionTime').textContent, '00:10');

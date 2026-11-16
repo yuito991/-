@@ -809,6 +809,7 @@
     .selection-dock-inner { max-width: 1220px; margin: auto; display: flex; align-items: center; gap: 8px; }
     .selection-clock { display: grid; gap: 2px; margin-right: auto; color: var(--muted); font-size: .75rem; }
     .selection-clock strong { color: var(--ink); font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+    .selection-summary { color: var(--ink); font-size: .75rem; }
     .selection-dock .icon-button { width: 44px; height: 44px; font-size: 1.25rem; flex-shrink: 0; }
     .selection-dock .button { min-height: 44px; }
     body.selecting-videos .shell { padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px)); }
@@ -824,12 +825,11 @@
     .preset-timer label { font-size: .9rem; font-weight: 700; }
     .preset-timer .input { width: 76px; min-height: 42px; }
     .preset-timer output { color: var(--muted); font-size: .9rem; font-variant-numeric: tabular-nums; }
-    .cooldown { position: fixed; inset: 0; z-index: 100; display: grid; align-content: center; justify-items: center; gap: 18px; padding: 24px; background: #000; color: #eee; text-align: center; }
-    .cooldown h2 { font-size: 1.2rem; margin: 0; font-weight: 600; }
-    .cooldown-time { font-size: 3rem; font-variant-numeric: tabular-nums; margin: 0; }
-    .cooldown p:last-child { margin: 0; color: #999; font-size: .9rem; }
-    body.site-locked { background: #000; }
-    body.site-locked .shell { display: none; }
+    .cooldown { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; padding: 12px 0; border-block: 1px solid var(--line); }
+    .cooldown h2 { margin: 0; font-size: .95rem; font-weight: 600; }
+    .cooldown-time { margin: 0; font-size: 1.25rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .cooldown p:last-child { margin: 0; color: var(--muted); font-size: .8rem; }
+    body.site-locked { color-scheme: dark; --ink: #eef2f6; --muted: #abb7c4; --panel: #111820; --line: #34414f; background: #000; }
     button:disabled { cursor: not-allowed; opacity: .5; }
     button:focus-visible, a:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 3px; }
     @media (max-width: 600px) {
@@ -841,6 +841,24 @@
       .quest-row img { width: 56px; }
       .quest-row-tools { grid-column: 3; justify-content: end; }
       .quest-stat dd { font-size: 1.08rem; }
+    }
+    @media (max-width: 720px), (orientation: landscape) and (max-height: 500px) {
+      body.selecting-videos .shell { display: flex; flex-direction: column; padding-top: 4px; }
+      body.selecting-videos .shell > header { display: none; }
+      body.selecting-videos #catalog { display: contents; }
+      #candidatePanel { order: -1; margin-bottom: 12px; }
+      #candidateHead { padding: 6px 0 8px; scroll-margin-top: 0; }
+      #refreshCandidates { display: none; }
+      #grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+      #grid .card { cursor: pointer; }
+      #grid .thumb-btn { max-height: clamp(24px, calc((100dvh - 300px - env(safe-area-inset-bottom, 0px)) / 3), 120px); }
+      #grid .card-body { display: block; padding: 5px 7px; }
+      #grid .card-body .meta, #grid .selection-button { display: none; }
+      #grid .title { font-size: .85rem; line-height: 1.3; min-height: 2.6em; overflow-wrap: anywhere; }
+      #grid .selection-mark { min-width: 22px; height: 22px; top: 4px; right: 4px; }
+    }
+    @media (orientation: landscape) and (max-height: 500px) {
+      #grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     }
   </style>
 </head>
@@ -854,6 +872,11 @@
       </div>
       <button class="button secondary" id="installApp" type="button" hidden>アプリをインストール</button>
     </header>
+    <section class="cooldown" id="cooldown" hidden aria-labelledby="lockTitle">
+      <h2 id="lockTitle" tabindex="-1">視聴リストのロック中</h2>
+      <p class="cooldown-time" id="lockRemaining">30:00</p>
+      <p id="unlockTime"></p>
+    </section>
     <section class="preset-panel" id="presetPanel" hidden aria-labelledby="presetHeading">
       <div class="candidate-head" id="presetHead"><h2 id="presetHeading" tabindex="-1">定番の動画</h2></div>
       <div class="preset-list" id="presetList"></div>
@@ -923,7 +946,7 @@
       </section>
       <section id="candidatePanel" hidden aria-label="動画選択">
         <div class="candidate-head" id="candidateHead">
-          <h2 id="candidateHeading">動画候補</h2>
+          <h2 id="candidateHeading" tabindex="-1">動画候補</h2>
           <div class="candidate-actions">
             <span id="candidateCount">0本</span>
             <button class="icon-button" id="refreshCandidates" type="button" title="候補を入れ替える" aria-label="候補を入れ替える">↻</button>
@@ -934,18 +957,16 @@
       </section>
       <div class="selection-dock" id="selectionDock" hidden aria-label="動画選択の操作">
         <div class="selection-dock-inner">
-          <span class="selection-clock">残り時間 <strong id="selectionTime" role="timer">00:10</strong></span>
+          <span class="selection-clock">
+            <span>残り時間 <strong id="selectionTime" role="timer">00:10</strong></span>
+            <span class="selection-summary" id="selectionSummary"></span>
+          </span>
           <button class="icon-button" id="refreshCandidatesBottom" type="button" title="候補を入れ替える" aria-label="下部の候補入れ替え">↻</button>
           <button class="button accent" id="playSelection" type="button" disabled>再生する</button>
         </div>
       </div>
     </div>
   </main>
-  <section class="cooldown" id="cooldown" hidden role="dialog" aria-modal="true" aria-labelledby="lockTitle">
-    <h2 id="lockTitle" tabindex="-1">視聴は終了しました</h2>
-    <p class="cooldown-time" id="lockRemaining">30:00</p>
-    <p id="unlockTime"></p>
-  </section>
 
   <script>
 
@@ -972,7 +993,7 @@
       'app','planning','queueCount','totalDuration','finishTime','startQuest','queueNote',
       'retryDurations','questList','catalog','setup','apiKey','saveKey','refresh','query',
       'yearFrom','yearTo','libraryFilter','grid','empty','errorBox','candidateCount','refreshCandidates',
-      'candidatePanel','candidateHead','presetPanel','presetHead','presetHeading','presetList','selectionDock','selectionTime','refreshCandidatesBottom','playSelection',
+      'candidatePanel','candidateHead','candidateHeading','presetPanel','presetHead','presetHeading','presetList','selectionDock','selectionTime','selectionSummary','refreshCandidatesBottom','playSelection',
       'watchArea','playerProgress','playerTitle','playerMeta','playerMessage','resumeQuest',
       'pauseQuest','seekForward','retryPlayer','nextVideo','endQuest','backToPresets','watchPresets','watchPresetList','cooldown','lockTitle','lockRemaining','unlockTime',
       'presetTimer','presetTimerMinutes','presetTimerStart','presetTimerCancel','presetTimerRemaining','presetTimerStatus'
@@ -1022,17 +1043,18 @@
       try {
         const data = JSON.parse(localStorage.getItem(QUEST_KEY) || 'null');
         const lock = Math.max(Number(localStorage.getItem(LOCK_KEY)) || 0, Number(data?.lockedUntil) || 0);
-        if (lock > Date.now()) return { ...emptyQuest(), phase: 'locked', lockedUntil: lock };
-        if (!data || data.phase === 'locked') return emptyQuest();
-        const items = (Array.isArray(data.items) ? data.items : [])
-          .filter(v => /^[A-Za-z0-9_-]{11}$/.test(v.id) && typeof v.title === 'string')
+        const lockedUntil = lock > Date.now() ? lock : 0;
+        const items = (Array.isArray(data?.items) ? data.items : [])
+          .filter(v => v && /^[A-Za-z0-9_-]{11}$/.test(v.id) && typeof v.title === 'string')
           .map(v => ({ ...v, durationSeconds: Number(v.durationSeconds) > 0 ? Number(v.durationSeconds) : PRESET_VIDEOS.get(v.id)?.durationSeconds || null }));
-        const running = data.phase === 'running' && items.length && items.every(v => v.durationSeconds > 0)
+        const running = data?.phase === 'running' && items.length && items.every(v => v.durationSeconds > 0)
           && Number.isInteger(data.index) && data.index >= 0 && data.index < items.length;
-        const selectionUntil = Number(data.selectionUntil);
         const presetMode = Boolean(running && data.presetMode === true && items.length === 1 && PRESET_VIDEOS.has(items[0].id));
+        if (lockedUntil && !presetMode) return { ...emptyQuest(), phase: 'locked', lockedUntil };
+        if (!data || data.phase === 'locked') return emptyQuest();
+        const selectionUntil = Number(data.selectionUntil);
         const presetPauseAt = Number(data.presetPauseAt);
-        return { ...emptyQuest(), items, phase: running ? 'running' : 'planning',
+        return { ...emptyQuest(), items, phase: running ? 'running' : 'planning', lockedUntil,
           presetMode, presetPauseAt: presetMode && Number.isFinite(presetPauseAt) && presetPauseAt > 0 ? presetPauseAt : 0,
           selectionUntil: !running && Number.isFinite(selectionUntil) && selectionUntil > 0 ? selectionUntil : 0,
           index: running ? data.index : 0, checkpoint: running ? Math.max(0, Math.min(Number(data.checkpoint) || 0, items[data.index].durationSeconds)) : 0 };
@@ -1096,9 +1118,7 @@
     }
     function render(redrawCandidates = false) {
       if (quest.phase !== 'planning') { renderPhase(); return; }
-      const selecting = isSelecting();
-      const videos = selecting ? drawCandidates(redrawCandidates) : [];
-      els.presetList.innerHTML = [...PRESET_VIDEOS.values()].map(video => presetButton(video, selecting)).join('');
+      const videos = isSelecting() ? drawCandidates(redrawCandidates) : [];
       els.grid.innerHTML = videos.map(videoCard).join('');
       els.empty.classList.toggle('hidden', videos.length > 0);
       els.empty.textContent = filteredVideos().length ? 'この条件の動画はすべて選択済みです。' : 'この条件に合う動画がありません。';
@@ -1107,20 +1127,18 @@
       els.refreshCandidatesBottom.disabled = !videos.length;
       renderQueue();
     }
-    function presetButton(video, selecting, currentId = '') {
-      const selected = selecting && quest.items.some(v => v.id === video.id);
+    function presetButton(video, currentId = '') {
       const current = video.id === currentId;
-      const disabled = current || selected || (!selecting && quest.selectionUntil);
-      const action = current ? '再生中の動画' : selecting ? selected ? '選択済み' : '追加' : '再生';
+      const action = current ? '再生中の動画' : '再生';
       return '<button class="preset-button" type="button" data-select="' + video.id + '"'
         + (current ? ' aria-current="true"' : '')
-        + (disabled ? ' disabled' : '') + '><img src="' + video.thumbnail + '" alt="">'
+        + (current ? ' disabled' : '') + '><img src="' + video.thumbnail + '" alt="">'
         + '<span><span class="preset-title">' + escapeHtml(video.title) + '</span><small>'
         + formatDuration(video.durationSeconds) + ' · ' + action + '</small></span></button>';
     }
     function videoCard(video) {
       const order = quest.items.findIndex(v => v.id === video.id);
-      return '<article class="card ' + (order >= 0 ? 'selected' : '') + '">'
+      return '<article class="card ' + (order >= 0 ? 'selected' : '') + '" data-select="' + escapeHtml(video.id) + '">'
         + '<button class="thumb-btn" type="button" data-select="' + escapeHtml(video.id) + '" aria-pressed="' + (order >= 0) + '" aria-label="' + escapeHtml(video.title) + 'を選択">'
         + '<img src="' + escapeHtml(video.thumbnail) + '" alt="" loading="lazy">'
         + '<span class="selection-mark">' + (order >= 0 ? order + 1 : '+') + '</span>'
@@ -1134,6 +1152,7 @@
       return quest.phase === 'planning' && quest.selectionUntil > Date.now();
     }
     function renderSelectionControls(selecting) {
+      els.presetPanel.hidden = !(quest.phase === 'locked' || (quest.phase === 'planning' && !quest.selectionUntil));
       els.candidatePanel.hidden = !selecting;
       els.selectionDock.hidden = !selecting;
       document.body.classList.toggle('selecting-videos', selecting);
@@ -1149,10 +1168,11 @@
       const total = quest.items.reduce((sum, v) => sum + (v.durationSeconds || 0), 0);
       els.queueCount.textContent = quest.items.length + '本';
       els.totalDuration.textContent = missing.length ? '時間を取得中' : formatDuration(total);
+      els.selectionSummary.textContent = els.queueCount.textContent + (quest.items.length ? ' · ' + els.totalDuration.textContent : '');
       els.finishTime.textContent = quest.items.length && !missing.length ? clockTime(Date.now() + total * 1000) : '--:--';
       const hasError = quest.items.some(v => durationErrors.has(v.id));
       const ready = quest.items.length > 0 && !missing.length && !durationBusy;
-      const canChoose = !quest.selectionUntil || hasError;
+      const canChoose = hasError || (!quest.selectionUntil && (quest.items.length || hasQueueCandidates()));
       els.startQuest.textContent = selecting ? '再生する' : !quest.selectionUntil ? '選択スタート' : hasError ? '選び直す' : '再生準備中';
       els.startQuest.disabled = quest.phase !== 'planning' || (selecting ? !ready : !canChoose);
       els.playSelection.disabled = !selecting || !ready;
@@ -1174,13 +1194,12 @@
     function selectVideo(id) {
       if (!isSelecting()) return;
       if (quest.items.some(v => v.id === id)) return;
-      const preset = PRESET_VIDEOS.get(id);
-      const video = preset || (candidateIds.includes(id) && allVideos.find(v => v.id === id && !v.isShort));
+      const video = candidateIds.includes(id) && allVideos.find(v => v.id === id && !v.isShort && !PRESET_VIDEOS.has(v.id));
       if (!video) return;
       quest.items.push({ ...video });
       saveQuest();
       render(true);
-      if (!preset) els.candidateHead.scrollIntoView({ behavior: 'auto', block: 'start' });
+      els.candidateHead.scrollIntoView({ behavior: 'auto', block: 'start' });
       scheduleDurations();
     }
     function changeQueue(id, action) {
@@ -1283,13 +1302,17 @@
       }
       renderPresetTimer();
     }
+    function renderCooldown() {
+      const seconds = Math.max(0, Math.ceil((quest.lockedUntil - Date.now()) / 1000));
+      els.cooldown.hidden = seconds === 0;
+      document.body.classList.toggle('site-locked', quest.phase === 'locked' && seconds > 0);
+      if (!seconds) return;
+      els.lockRemaining.textContent = String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0');
+      els.unlockTime.textContent = clockTime(quest.lockedUntil) + ' に解除';
+    }
     function renderPhase() {
-      const locked = quest.phase === 'locked' && quest.lockedUntil > Date.now();
       const watchingPreset = isPresetPlayback();
-      document.body.classList.toggle('site-locked', locked);
-      els.cooldown.hidden = !locked;
-      els.app.inert = locked;
-      els.presetPanel.hidden = quest.phase !== 'planning';
+      renderCooldown();
       els.planning.hidden = quest.phase !== 'planning';
       els.catalog.hidden = quest.phase !== 'planning';
       els.watchArea.hidden = quest.phase !== 'running';
@@ -1300,21 +1323,20 @@
       els.nextVideo.hidden = quest.phase !== 'running' || quest.index + 1 >= quest.items.length;
       els.endQuest.hidden = !canEndQuest();
       renderSelectionControls(isSelecting());
-      if (locked) {
-        const seconds = Math.max(0, Math.ceil((quest.lockedUntil - Date.now()) / 1000));
-        els.lockRemaining.textContent = String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0');
-        els.unlockTime.textContent = clockTime(quest.lockedUntil) + ' に解除';
-      }
       if (quest.phase === 'running') {
         const video = quest.items[quest.index];
         els.playerProgress.textContent = (quest.index + 1) + ' / ' + quest.items.length + ' 本';
         els.playerTitle.textContent = video.title;
         els.playerMeta.textContent = formatDuration(video.durationSeconds);
-        if (watchingPreset) els.watchPresetList.innerHTML = [...PRESET_VIDEOS.values()].map(preset => presetButton(preset, false, video.id)).join('');
+        if (watchingPreset) els.watchPresetList.innerHTML = [...PRESET_VIDEOS.values()].map(preset => presetButton(preset, video.id)).join('');
       }
+    }
+    function hasQueueCandidates() {
+      return allVideos.some(video => !video.isShort && !PRESET_VIDEOS.has(video.id));
     }
     function beginSelection() {
       if (quest.phase !== 'planning' || isSelecting()) return;
+      if (!quest.items.length && !hasQueueCandidates()) return;
       if (quest.selectionUntil && !quest.items.some(v => durationErrors.has(v.id))) return;
       const previousDeadline = quest.selectionUntil;
       quest.selectionUntil = Date.now() + SELECTION_MS;
@@ -1324,7 +1346,8 @@
       shownCandidateIds.clear();
       render(true);
       scheduleDurations();
-      els.presetHead.scrollIntoView({ behavior: 'auto', block: 'start' });
+      els.candidateHeading.focus({ preventScroll: true });
+      els.candidateHead.scrollIntoView({ behavior: 'auto', block: 'start' });
     }
     function finishSelectionIfDue() {
       if (quest.phase !== 'planning' || !quest.selectionUntil || isSelecting()) return false;
@@ -1344,7 +1367,7 @@
     }
     function playPreset(id) {
       const video = PRESET_VIDEOS.get(id);
-      const canStart = quest.phase === 'planning' && !quest.selectionUntil;
+      const canStart = quest.phase === 'locked' || (quest.phase === 'planning' && !quest.selectionUntil);
       const canSwitch = quest.phase === 'running' && quest.presetMode && quest.items[quest.index].id !== id;
       if (!video || (!canStart && !canSwitch)) return false;
       return startPlayback([{ ...video }], true, canSwitch ? quest.presetPauseAt : 0);
@@ -1352,7 +1375,8 @@
     function backToPresets() {
       if (quest.phase !== 'running' || !quest.presetMode) return false;
       const previousQuest = quest;
-      quest = emptyQuest();
+      quest = previousQuest.lockedUntil > Date.now()
+        ? { ...emptyQuest(), phase: 'locked', lockedUntil: previousQuest.lockedUntil } : emptyQuest();
       if (!saveQuest()) { quest = previousQuest; return false; }
       destroyPlayer();
       selectionMessage = '';
@@ -1367,7 +1391,8 @@
     function startPlayback(items, presetMode = false, presetPauseAt = 0) {
       if (!items.length || items.some(v => !v.durationSeconds)) return false;
       const previousQuest = quest;
-      quest = { ...emptyQuest(), phase: 'running', items, presetMode, presetPauseAt };
+      const lockedUntil = presetMode ? previousQuest.lockedUntil : 0;
+      quest = { ...emptyQuest(), phase: 'running', items, presetMode, presetPauseAt, lockedUntil };
       if (!saveQuest()) { quest = previousQuest; return false; }
       showError('');
       els.presetTimerStatus.textContent = '';
@@ -1566,17 +1591,27 @@
       els.lockTitle.focus();
     }
     function tick() {
-      if (quest.phase === 'locked') {
+      if (quest.lockedUntil) {
         if (Date.now() >= quest.lockedUntil) {
-          quest = emptyQuest();
-          saveQuest();
-          try { localStorage.removeItem(LOCK_KEY); } catch {}
-          renderPhase();
-          render();
-          els.startQuest.focus();
-          scheduleAutoFetch();
-        } else renderPhase();
-      } else if (quest.phase === 'running') {
+          const wasLocked = quest.phase === 'locked';
+          const presetInAnotherTab = wasLocked && readQuest().presetMode;
+          if (wasLocked) quest = emptyQuest();
+          else quest.lockedUntil = 0;
+          if (!presetInAnotherTab) saveQuest();
+          try {
+            if (Number(localStorage.getItem(LOCK_KEY)) <= Date.now()) localStorage.removeItem(LOCK_KEY);
+          } catch {}
+          if (wasLocked) {
+            renderPhase();
+            render();
+            els.startQuest.focus();
+            scheduleAutoFetch();
+            return;
+          }
+        }
+        renderCooldown();
+      }
+      if (quest.phase === 'running') {
         updatePresetTimer();
         if (playerReady && player?.getPlayerState?.() === 1) {
           if (!currentVideoMatches()) loadCurrentVideo();
@@ -1862,9 +1897,7 @@
     els.grid.addEventListener('click', selectFromButton);
     els.presetList.addEventListener('click', event => {
       const target = event.target.closest('[data-select]');
-      if (!target) return;
-      if (isSelecting()) selectVideo(target.dataset.select);
-      else playPreset(target.dataset.select);
+      if (target) playPreset(target.dataset.select);
     });
     els.watchPresetList.addEventListener('click', event => {
       const target = event.target.closest('[data-select]');
@@ -1914,7 +1947,14 @@
     window.addEventListener('storage', event => {
       if (event.key !== QUEST_KEY && event.key !== LOCK_KEY) return;
       const next = readQuest();
-      if (next.phase === 'locked' || (quest.phase === 'planning' && next.phase === 'running')) {
+      if (next.lockedUntil && isPresetPlayback()) {
+        quest.lockedUntil = Math.max(quest.lockedUntil, next.lockedUntil);
+        renderCooldown();
+      } else if (next.lockedUntil) {
+        quest = { ...emptyQuest(), phase: 'locked', lockedUntil: next.lockedUntil };
+        destroyPlayer();
+        renderPhase();
+      } else if (quest.phase === 'planning' && next.phase === 'running' && !next.presetMode) {
         quest = next;
         destroyPlayer();
         renderPhase();
@@ -1924,6 +1964,7 @@
       }
     });
     document.addEventListener('visibilitychange', tick);
+    els.presetList.innerHTML = [...PRESET_VIDEOS.values()].map(video => presetButton(video)).join('');
     restoreCache();
     window.setInterval(tick, 1000);
 
