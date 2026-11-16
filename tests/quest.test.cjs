@@ -93,12 +93,21 @@ async function main() {
   assert.equal(automatic.get('quest.index'), 1, 'YouTube ended event advances even after seeking');
 
   assert.equal(app.nodes.get('nextVideo').hidden, false);
+  assert.equal(app.nodes.get('endQuest').hidden, true);
+  assert.equal(app.run('endQuest()'), false, 'Only the last item can be stopped early');
   assert.equal(app.run('advanceQuest()'), true);
   assert.equal(app.get('quest.index'), 1);
   assert.equal(app.get('quest.checkpoint'), 0);
   assert.equal(app.get('player.id'), 'aaaaaaaaaaa');
   assert.equal(app.get('state.watched.has("bbbbbbbbbbb")'), false, 'Manual skips do not mark the skipped video watched');
   assert.equal(app.nodes.get('nextVideo').hidden, true);
+  assert.equal(app.nodes.get('endQuest').hidden, false);
+  const stoppedEarly = boot(new Map(app.saved));
+  stoppedEarly.run('player={destroy(){}};playerReady=true;');
+  assert.equal(stoppedEarly.run('endQuest()'), true);
+  assert.equal(stoppedEarly.get('quest.lockedUntil-Date.now()'), 1800000);
+  assert.equal(stoppedEarly.get('player'), null, 'Early exit destroys the player');
+  assert.equal(stoppedEarly.get('state.watched.has("aaaaaaaaaaa")'), false, 'Unfinished video is not marked watched');
   assert.equal(app.run('advanceQuest()'), false, 'There is no next-video action on the last item');
   app.run('finishCurrentVideo()');
   assert.equal(app.get('quest.phase'), 'running', 'Duplicate end events do not clear the next video');
@@ -149,6 +158,8 @@ async function main() {
   assert.equal(direct.get('quest.selectionUntil'), 0);
   assert.equal(direct.nodes.get('presetPanel').hidden, true);
   assert.equal(direct.nodes.get('nextVideo').hidden, true);
+  assert.equal(direct.nodes.get('endQuest').hidden, true);
+  assert.equal(direct.run('endQuest()'), false, 'Direct presets have no finish-and-lock action');
   assert.equal(direct.nodes.get('backToPresets').hidden, false);
   assert.equal(direct.nodes.get('watchPresets').hidden, false);
   assert.equal(direct.nodes.get('presetTimer').hidden, false);

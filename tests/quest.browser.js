@@ -46,6 +46,7 @@ async page => {
   await page.clock.runFor(500);
   check(await page.locator('#catalog').isHidden(), 'Catalog hidden during playback');
   check(await page.locator('#playerProgress').innerText() === '1 / 2 本', 'First video');
+  check(await page.locator('#endQuest').isHidden(), 'No finish button until the last video');
   check(await page.evaluate(() => window.testPlayerVars.controls === 0 && window.testPlayerVars.disablekb === 1), 'YouTube seek bar and keyboard shortcuts are disabled');
   check(await page.locator('#backToPresets').isHidden() && await page.locator('#watchPresets').isHidden(), 'Preset navigation is unavailable in the queue');
   check(await page.locator('#presetTimer').isHidden(), 'Pause timer is unavailable in the queue');
@@ -57,10 +58,10 @@ async page => {
   await page.locator('#resumeQuest').click();
   await page.clock.runFor(583000);
   check(await page.locator('#playerProgress').innerText() === '2 / 2 本', 'Automatic next video');
-  await page.clock.runFor(779000);
-  check(await page.locator('#cooldown').isVisible(), 'Lock after all videos');
-  check(await page.locator('iframe').count() === 0, 'No hidden player');
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: '視聴を終了', exact: true }).click();
+  check(await page.locator('#cooldown').isVisible(), 'Finish button locks immediately during the last video');
+  check(await page.locator('iframe').count() === 0, 'No hidden player');
   await page.screenshot({ path: 'output/playwright/quest-mobile-locked.png' });
   await page.reload();
   check(await page.locator('#cooldown').isVisible(), 'Lock survives reload');
@@ -71,6 +72,7 @@ async page => {
   await page.locator('#presetList [data-select="' + workVideo + '"]').click();
   await page.clock.runFor(500);
   check(await page.locator('#watchArea').isVisible(), 'Preset opens immediately without selection');
+  check(await page.locator('#endQuest').isHidden(), 'No finish-and-lock button for presets');
   check(await page.locator('#playerProgress').innerText() === '1 / 1 本', 'Only the tapped video plays');
   check(await page.locator('#playerMeta').innerText() === '1時間30分3秒', 'New preset shows its actual duration');
   check(await page.locator('#pauseQuest').isVisible(), 'Preset starts playing');

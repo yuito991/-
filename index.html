@@ -886,6 +886,7 @@
         <button class="button secondary" id="seekForward" type="button" disabled>10秒進む</button>
         <button class="button secondary" id="retryPlayer" type="button" hidden>同じ動画を再読み込み</button>
         <button class="button secondary" id="nextVideo" type="button" hidden>次の動画へ</button>
+        <button class="button secondary" id="endQuest" type="button" hidden>視聴を終了</button>
         <button class="button secondary" id="backToPresets" type="button" hidden>一覧に戻る</button>
       </div>
       <form class="preset-timer" id="presetTimer" hidden>
@@ -973,7 +974,7 @@
       'yearFrom','yearTo','libraryFilter','grid','empty','errorBox','candidateCount','refreshCandidates',
       'candidatePanel','candidateHead','presetPanel','presetHead','presetHeading','presetList','selectionDock','selectionTime','refreshCandidatesBottom','playSelection',
       'watchArea','playerProgress','playerTitle','playerMeta','playerMessage','resumeQuest',
-      'pauseQuest','seekForward','retryPlayer','nextVideo','backToPresets','watchPresets','watchPresetList','cooldown','lockTitle','lockRemaining','unlockTime',
+      'pauseQuest','seekForward','retryPlayer','nextVideo','endQuest','backToPresets','watchPresets','watchPresetList','cooldown','lockTitle','lockRemaining','unlockTime',
       'presetTimer','presetTimerMinutes','presetTimerStart','presetTimerCancel','presetTimerRemaining','presetTimerStatus'
     ].map(id => [id, document.getElementById(id)]));
     let allVideos = [];
@@ -1297,6 +1298,7 @@
       els.presetTimer.hidden = !watchingPreset;
       if (watchingPreset) renderPresetTimer();
       els.nextVideo.hidden = quest.phase !== 'running' || quest.index + 1 >= quest.items.length;
+      els.endQuest.hidden = !canEndQuest();
       renderSelectionControls(isSelecting());
       if (locked) {
         const seconds = Math.max(0, Math.ceil((quest.lockedUntil - Date.now()) / 1000));
@@ -1514,6 +1516,14 @@
       saveQuest();
       if (playerReady) loadCurrentVideo();
       else { renderPhase(); resumeQuest(); }
+      return true;
+    }
+    function canEndQuest() {
+      return quest.phase === 'running' && !quest.presetMode && quest.index === quest.items.length - 1;
+    }
+    function endQuest() {
+      if (!canEndQuest()) return false;
+      beginCooldown();
       return true;
     }
     function finishCurrentVideo() {
@@ -1870,6 +1880,7 @@
     els.pauseQuest.addEventListener('click', () => { if (currentVideoMatches()) player.pauseVideo(); });
     els.seekForward.addEventListener('click', seekForward);
     els.nextVideo.addEventListener('click', advanceQuest);
+    els.endQuest.addEventListener('click', endQuest);
     els.backToPresets.addEventListener('click', backToPresets);
     els.presetTimer.addEventListener('submit', event => {
       event.preventDefault();
