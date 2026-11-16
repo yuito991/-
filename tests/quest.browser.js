@@ -92,8 +92,9 @@ async page => {
   check(await page.locator('#watchPresetList button:visible').count() === 4, 'Preset choices remain available while playing');
   check(await page.locator('#watchPresetList [data-select="' + workVideo + '"]').isDisabled(), 'Current preset is marked');
   await page.locator('#presetTimerMinutes').fill('1');
+  await page.locator('#presetRestMinutes').fill('1');
   await page.locator('#presetTimerStart').click();
-  check(await page.locator('#presetTimerRemaining').isVisible(), 'Pause timer shows remaining time');
+  check(await page.locator('#presetTimerRemaining').isVisible(), 'Focus schedule shows remaining time');
   await page.screenshot({ path: 'output/playwright/quest-mobile-preset-player.png' });
   await page.locator('#watchPresetList [data-select="' + secondPreset + '"]').click();
   check(await page.locator('#playerMeta').innerText() === '12分59秒', 'Switches to a different preset');
@@ -106,8 +107,15 @@ async page => {
   await page.clock.runFor(500);
   await page.locator('iframe').waitFor();
   await page.clock.runFor(60000);
-  check(await page.locator('#presetTimerStatus').innerText() === 'タイマー終了', 'Timer expires automatically');
-  check(await page.locator('#resumeQuest').isVisible() && await page.locator('#pauseQuest').isHidden(), 'Timer paused playback');
+  check(await page.locator('#restScreen').isVisible(), 'Focus expiry opens rest');
+  check(await page.locator('iframe').count() === 0, 'No playback during rest');
+  check(await page.locator('#app').evaluate(app => app.inert), 'Rest blocks app controls');
+  await page.screenshot({ path: 'output/playwright/quest-mobile-rest.png' });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  check(await page.locator('#restScreen').isVisible(), 'Rest survives reload');
+  await page.clock.runFor(60000);
+  check(await page.locator('#restScreen').isHidden(), 'Rest ends at the scheduled time');
+  check(await page.locator('iframe').count() === 0, 'No autoplay after rest');
   await page.locator('#resumeQuest').click();
   await page.clock.fastForward(779000);
   check(await page.locator('#playerMessage').innerText() === '再生が終了しました。', 'Preset finished normally');
@@ -122,5 +130,5 @@ async page => {
   await page.locator('#backToPresets').click();
   check(await page.locator('#catalog').isVisible() && await page.locator('#startQuest').isEnabled(), 'Ordinary selection is available again');
   check(dataApiCalls === 0, 'Preset selection and playback do not call the Data API');
-  console.log('PASS browser: preset pause timer and unrestricted completion; ordinary queue cooldown');
+  console.log('PASS browser: focus-to-rest schedule, reload, manual resume, ordinary queue cooldown');
 }
