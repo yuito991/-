@@ -68,8 +68,12 @@ async function main() {
   assert.equal(waitingReload.run('playAfterInterval()'), false);
   waitingReload.advance(1000);
   waitingReload.run('tick()');
-  assert.equal(waitingReload.nodes.get('playAfterInterval').disabled, false);
+  assert.equal(waitingReload.nodes.get('playAfterInterval').disabled, true);
   assert.equal(waitingReload.get('quest.phase'), 'waiting', 'Nothing autoplays at the end of the interval');
+  waitingReload.run('for (let i=0;i<499;i++) tapRestUnlock()');
+  assert.equal(waitingReload.run('playAfterInterval()'), false, '499 taps still block playback');
+  waitingReload.run('tapRestUnlock();tick()');
+  assert.equal(waitingReload.nodes.get('playAfterInterval').disabled, false);
   assert.equal(waitingReload.run('resumeQuest=()=>{};playAfterInterval()'), true);
   assert.equal(waitingReload.get('quest.phase'), 'running');
   assert.deepEqual(waitingReload.get('quest.items.map(v=>v.id)'), ['aaaaaaaaaaa']);
@@ -80,10 +84,15 @@ async function main() {
   afterSelection.advance(10000);
   afterSelection.run('tick()');
   assert.equal(afterSelection.get('quest.phase'), 'waiting', 'Selection timeout also applies the evening interval');
-  afterSelection.advance(315000);
+  afterSelection.advance(300000);
   afterSelection.run('tick()');
   assert.equal(afterSelection.run('playAfterInterval()'), false, 'The evening interval cannot bypass the daily rest');
   assert.equal(afterSelection.nodes.get('app').inert, true);
+  afterSelection.advance(15000);
+  afterSelection.run('tick()');
+  assert.equal(afterSelection.nodes.get('app').inert, false);
+  assert.equal(afterSelection.nodes.get('restTapPanel').hidden, false);
+  assert.equal(afterSelection.run('playAfterInterval()'), false, 'The queue stays locked after overlapping waits');
 
   const preset = setup('2026-11-09T10:00:00Z');
   assert.equal(preset.run('resumeQuest=()=>{};playPreset("80mAjV1XUUc")'), true);

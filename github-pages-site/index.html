@@ -892,6 +892,11 @@
       <div class="candidate-head" id="presetHead"><h2 id="presetHeading" tabindex="-1">定番の動画</h2></div>
       <div class="preset-list" id="presetList"></div>
     </section>
+    <section class="interval-panel" id="restTapPanel" hidden aria-labelledby="restTapTitle">
+      <h2 id="restTapTitle">選択動画のロック中</h2>
+      <p class="cooldown-time" id="restTapCount"></p>
+      <button class="button accent rest-unlock" id="restTapButton" type="button" aria-describedby="restTapCount">タップして解除</button>
+    </section>
     <section class="quest-summary" id="planning" aria-labelledby="questHeading">
       <h2 class="quest-heading" id="questHeading">今回の動画</h2>
       <div class="quest-stats">
@@ -992,8 +997,6 @@
     <h2 id="restTitle" tabindex="-1">休憩中</h2>
     <p class="rest-remaining" id="restRemaining" role="timer"></p>
     <p id="restUnlockTime"></p>
-    <p class="rest-remaining" id="restTapCount" hidden></p>
-    <button class="button accent rest-unlock" id="restTapButton" type="button" hidden>タップして解除</button>
   </section>
 
   <script>
@@ -1034,7 +1037,7 @@
       'intervalPanel','intervalTitle','intervalVideoTitle','intervalRemaining','playAfterInterval','cancelInterval',
       'pauseQuest','seekForward','retryPlayer','nextVideo','endQuest','backToPresets','watchPresets','watchPresetList','cooldown','lockTitle','lockRemaining','unlockTime',
       'presetTimer','presetTimerFields','presetTimerMinutes','presetRestMinutes','presetTimerCancel','presetTimerRemaining',
-      'restScreen','restTitle','restRemaining','restUnlockTime','restTapCount','restTapButton'
+      'restScreen','restTitle','restRemaining','restUnlockTime','restTapPanel','restTapCount','restTapButton'
     ].map(id => [id, document.getElementById(id)]));
     let allVideos = [];
     let candidateIds = [];
@@ -1048,8 +1051,9 @@
     let state = loadState();
     let quest = readQuest();
     let focusSchedule = readFocusSchedule();
-    let restUnlock = readRestUnlock();
+    let restUnlock = readRestUnlock() || { unlockedThrough: 0, pendingUntil: 0, taps: 0 };
     let restApplied = false;
+    let tapGateApplied = false;
     let selectionMessage = '';
     let durationBusy = false;
     let durationTimer = 0;
@@ -1331,33 +1335,49 @@
     function dailyRestEndToday(now) {
       return Math.floor(now / 60000) * 60000 + (DAILY_REST_END_MINUTE - tokyoMinuteOfDay(now)) * 60000;
     }
-    function latestDailyRestEnd(now) {
+    function dailyUnlockDeadline(now) {
       const today = dailyRestEndToday(now);
-      return now >= today ? today : 0;
+      return now >= today - (DAILY_REST_END_MINUTE - DAILY_REST_START_MINUTE) * 60000 ? today : 0;
     }
     function readRestUnlock() {
       try {
         const saved = JSON.parse(localStorage.getItem(REST_UNLOCK_KEY) || 'null');
         if (saved && Number.isFinite(saved.unlockedThrough) && Number.isFinite(saved.pendingUntil)
-          && Number.isInteger(saved.taps) && saved.taps >= 0 && saved.taps < REST_UNLOCK_TAPS) return saved;
+          && Number.isInteger(saved.taps) && saved.taps >= 0 && saved.taps < REST_UNLOCK_TAPS) {
+          if (saved.version !== 2 && saved.pendingUntil && tokyoMinuteOfDay(saved.pendingUntil) < EVENING_START_MINUTE) {
+            return { ...saved, pendingUntil: 0, taps: 0 };
+          }
+          return saved;
+        }
       } catch {}
       return null;
     }
     function saveRestUnlock(next) {
       restUnlock = next;
-      try { localStorage.setItem(REST_UNLOCK_KEY, JSON.stringify(next)); } catch {}
+      try { localStorage.setItem(REST_UNLOCK_KEY, JSON.stringify({ ...next, version: 2 })); } catch {}
     }
     function restDeadline(now) {
-      const today = dailyRestEndToday(now);
-      const midnight = today - DAILY_REST_END_MINUTE * 60000;
-      const daily = now >= today - (DAILY_REST_END_MINUTE - DAILY_REST_START_MINUTE) * 60000
-        ? today : 0;
+      const today = dailyUnlockDeadline(now);
+      const daily = now < today ? today : 0;
       const focusRest = focusSchedule && now >= focusSchedule.focusAt ? focusSchedule.restAt : 0;
-      const deadline = Math.max(daily, focusRest, restUnlock.pendingUntil);
-      return deadline > midnight ? deadline : 0;
+      return Math.max(daily, focusRest);
     }
-    function isViewingLocked() {
-      return restDeadline(Date.now()) > restUnlock.unlockedThrough;
+    function isRestDue() {
+      return restDeadline(Date.now()) > 0;
+    }
+    function tapUnlockDeadline(now) {
+      const focusRest = focusSchedule && now >= focusSchedule.focusAt
+        && tokyoMinuteOfDay(focusSchedule.restAt) >= EVENING_START_MINUTE ? focusSchedule.restAt : 0;
+      const interval = quest.phase === 'waiting' && now >= quest.playAfter ? quest.playAfter : 0;
+      return Math.max(dailyUnlockDeadline(now), focusRest, interval, restUnlock.pendingUntil);
+    }
+    function isQueueTapLocked() {
+      const now = Date.now();
+      const deadline = tapUnlockDeadline(now);
+      return now >= deadline && deadline > restUnlock.unlockedThrough;
+    }
+    function isViewingLocked(presetMode = quest.presetMode) {
+      return isRestDue() || (!presetMode && isQueueTapLocked());
     }
     function timerText(deadline) {
       const seconds = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
@@ -1391,72 +1411,69 @@
     }
     function renderRest(deadline) {
       const active = deadline > 0;
-      const waiting = active && Date.now() < deadline;
-      const tapping = active && !waiting;
-      const starting = waiting && els.restRemaining.hidden;
-      const unlocking = tapping && els.restTapButton.hidden;
+      const starting = active && els.restScreen.hidden;
       els.restScreen.hidden = !active;
-      els.restRemaining.hidden = !waiting;
-      els.restUnlockTime.hidden = !waiting;
-      els.restTapCount.hidden = !tapping;
-      els.restTapButton.hidden = !tapping;
       els.app.inert = active;
       document.body.classList.toggle('resting', active);
-      if (waiting) {
-        els.restTitle.textContent = '休憩中';
+      if (active) {
         els.restRemaining.textContent = timerText(deadline);
         els.restUnlockTime.textContent = clockTime(deadline) + ' に終了';
         if (starting) els.restTitle.focus();
       }
-      if (tapping) {
-        els.restTitle.textContent = '解除まで500回';
-        els.restTapCount.textContent = restUnlock.taps + ' / ' + REST_UNLOCK_TAPS;
-        if (unlocking) els.restTapButton.focus();
+    }
+    function stopPlaybackForRest() {
+      if (quest.phase === 'running') {
+        recordProgress(true);
+        destroyPlayer();
+        resetPlayerControls();
+      } else if (quest.phase === 'planning' && quest.selectionUntil) {
+        quest.selectionUntil = 0;
+        saveQuest();
+        render();
       }
+    }
+    function updateTapGate() {
+      const locked = isQueueTapLocked();
+      if (locked) els.restTapCount.textContent = restUnlock.taps + ' / ' + REST_UNLOCK_TAPS;
+      if (locked === tapGateApplied) return;
+      tapGateApplied = locked;
+      if (locked && !isPresetPlayback()) stopPlaybackForRest();
+      renderPhase();
+      if (quest.phase === 'planning') render();
+      if (locked && !isPresetPlayback() && els.restScreen.hidden) els.restTapButton.focus();
     }
     function updateRest() {
       const now = Date.now();
+      const unlockDeadline = tapUnlockDeadline(now);
+      if (unlockDeadline > Math.max(restUnlock.unlockedThrough, restUnlock.pendingUntil)) {
+        saveRestUnlock({ ...restUnlock, pendingUntil: unlockDeadline, taps: 0 });
+      }
       const deadline = restDeadline(now);
-      const locked = deadline > restUnlock.unlockedThrough;
-      if (locked) {
-        if (deadline !== restUnlock.pendingUntil) {
-          saveRestUnlock({ ...restUnlock, pendingUntil: deadline, taps: 0 });
-        }
-        if (!restApplied) {
-          restApplied = true;
-          if (quest.phase === 'running') {
-            recordProgress(true);
-            destroyPlayer();
-            resetPlayerControls('解除後に再生を再開できます。');
-          } else if (quest.phase === 'planning' && quest.selectionUntil) {
-            quest.selectionUntil = 0;
-            saveQuest();
-            render();
-          }
-        }
+      if (deadline && !restApplied) {
+        restApplied = true;
+        stopPlaybackForRest();
       }
       if (focusSchedule && now >= focusSchedule.restAt && !saveFocusSchedule(null)) focusSchedule = null;
-      if (locked) {
+      if (now < deadline) {
         renderRest(deadline);
         return true;
-      }
-      if (restUnlock.pendingUntil) {
-        saveRestUnlock({ unlockedThrough: Math.max(restUnlock.unlockedThrough, restUnlock.pendingUntil), pendingUntil: 0, taps: 0 });
       }
       if (restApplied) {
         restApplied = false;
         renderRest(0);
         if (quest.phase === 'running') {
-          els.playerMessage.textContent = 'ロックを解除しました。';
+          els.playerMessage.textContent = '休憩が終わりました。';
           els.resumeQuest.focus();
         }
       }
+      updateTapGate();
       if (isPresetPlayback()) renderPresetTimer();
       return false;
     }
     function tapRestUnlock() {
+      if (isRestDue() || isPresetPlayback()) return false;
       const now = Date.now();
-      const deadline = restDeadline(now);
+      const deadline = tapUnlockDeadline(now);
       if (deadline !== restUnlock.pendingUntil || deadline <= restUnlock.unlockedThrough || now < deadline) return false;
       const taps = restUnlock.taps + 1;
       saveRestUnlock(taps === REST_UNLOCK_TAPS
@@ -1475,15 +1492,18 @@
     }
     function renderPhase() {
       const watchingPreset = isPresetPlayback();
+      const tapLocked = isQueueTapLocked() && !watchingPreset;
       renderCooldown();
-      els.planning.hidden = quest.phase !== 'planning';
-      els.catalog.hidden = quest.phase !== 'planning';
+      els.restTapPanel.hidden = !tapLocked;
+      if (tapLocked) els.restTapCount.textContent = restUnlock.taps + ' / ' + REST_UNLOCK_TAPS;
+      els.planning.hidden = quest.phase !== 'planning' || tapLocked;
+      els.catalog.hidden = quest.phase !== 'planning' || tapLocked;
       els.intervalPanel.hidden = quest.phase !== 'waiting';
       if (quest.phase === 'waiting') {
         els.intervalVideoTitle.textContent = quest.items[0].title;
         renderInterval();
       }
-      els.watchArea.hidden = quest.phase !== 'running';
+      els.watchArea.hidden = quest.phase !== 'running' || tapLocked;
       els.backToPresets.hidden = !watchingPreset;
       els.watchPresets.hidden = !watchingPreset;
       els.presetTimer.hidden = !watchingPreset;
@@ -1553,7 +1573,9 @@
       return startPlayback(quest.items);
     }
     function cancelInterval() {
-      if (quest.phase !== 'waiting' || isViewingLocked()) return;
+      if (quest.phase !== 'waiting' || isRestDue()) return;
+      // Keep a completed interval's tap requirement if its queue is discarded.
+      updateRest();
       const previousQuest = quest;
       quest = emptyQuest();
       if (!saveQuest()) { quest = previousQuest; return; }
@@ -1586,7 +1608,7 @@
       return true;
     }
     function startPlayback(items, presetMode = false) {
-      if (isViewingLocked() || !items.length || items.some(v => !v.durationSeconds)) return false;
+      if (isViewingLocked(presetMode) || !items.length || items.some(v => !v.durationSeconds)) return false;
       const previousQuest = quest;
       const lockedUntil = presetMode ? previousQuest.lockedUntil : 0;
       quest = { ...emptyQuest(), phase: 'running', items, presetMode, lockedUntil };
@@ -2127,6 +2149,9 @@
     els.presetTimerCancel.addEventListener('click', cancelPresetTimer);
     els.restTapButton.addEventListener('click', tapRestUnlock);
     els.restTapButton.addEventListener('keydown', event => {
+      if (event.repeat) event.preventDefault();
+    });
+    els.restTapButton.addEventListener('keydown', event => {
       if (event.repeat && (event.key === 'Enter' || event.key === ' ')) event.preventDefault();
     });
     els.retryPlayer.addEventListener('click', () => {
@@ -2188,7 +2213,6 @@
     });
     document.addEventListener('visibilitychange', tick);
     els.presetList.innerHTML = [...PRESET_VIDEOS.values()].map(video => presetButton(video)).join('');
-    if (!restUnlock) saveRestUnlock({ unlockedThrough: latestDailyRestEnd(Date.now()), pendingUntil: 0, taps: 0 });
     renderRest(0);
     restoreCache();
     updateRest();

@@ -211,9 +211,8 @@ async function main() {
   direct.advance(120000);
   direct.run('tick()');
   assert.equal(direct.get('focusSchedule'), null);
-  assert.equal(direct.nodes.get('restTapButton').hidden, false, 'Focus rest opens the challenge');
-  assert.equal(direct.nodes.get('app').inert, true);
-  direct.run('for(let i=0;i<500;i++) tapRestUnlock()');
+  assert.equal(direct.nodes.get('restTapPanel').hidden, true, 'Daytime focus rest does not open a challenge');
+  assert.equal(direct.nodes.get('app').inert, false);
   assert.equal(direct.nodes.get('restScreen').hidden, true);
   assert.equal(direct.get('player'), null, 'Rest expiry does not autoplay');
   assert.equal(direct.saved.has(LOCK), false);
@@ -254,7 +253,7 @@ async function testDailyRest() {
   resumed.run('tick()');
   assert.equal(resumed.nodes.get('restTapCount').textContent, '0 / 500');
   resumed.run('for(let i=0;i<499;i++) tapRestUnlock()');
-  assert.equal(resumed.nodes.get('app').inert, true, '499 taps are not enough');
+  assert.equal(resumed.nodes.get('watchArea').hidden, true, '499 taps are not enough');
   const challengeReload = boot(new Map(resumed.saved), '2026-11-09T11:36:00Z');
   assert.equal(challengeReload.nodes.get('restTapCount').textContent, '499 / 500');
   assert.equal(challengeReload.run('playPreset("80mAjV1XUUc")'), false);
@@ -263,15 +262,14 @@ async function testDailyRest() {
   assert.equal(midnight.nodes.get('restTapCount').textContent, '499 / 500', 'Still locked at 23:59:59 JST');
   midnight.advance(1000);
   midnight.run('tick()');
-  assert.equal(midnight.nodes.get('restScreen').hidden, true, 'Midnight releases an unfinished tap challenge');
-  assert.equal(midnight.nodes.get('app').inert, false);
-  assert.equal(midnight.get('restUnlock.taps'), 0);
+  assert.equal(midnight.nodes.get('restTapPanel').hidden, false, 'Midnight does not release an unfinished tap challenge');
+  assert.equal(midnight.get('restUnlock.taps'), 499);
   assert.equal(midnight.get('player'), null, 'Midnight does not autoplay');
   assert.equal(midnight.get('quest.checkpoint'), 92);
   const reopenedAtMidnight = boot(new Map(challengeReload.saved), '2026-11-09T15:00:00Z');
-  assert.equal(reopenedAtMidnight.run('isViewingLocked()'), false, 'Closing and reopening after midnight also releases it');
+  assert.equal(reopenedAtMidnight.run('isViewingLocked()'), true, 'Reload after midnight preserves the challenge');
   challengeReload.run('tapRestUnlock()');
-  assert.equal(challengeReload.nodes.get('restScreen').hidden, true, 'Exactly 500 taps release the lock');
+  assert.equal(challengeReload.nodes.get('restTapPanel').hidden, true, 'Exactly 500 taps release the lock');
   assert.equal(challengeReload.nodes.get('app').inert, false);
   assert.equal(challengeReload.get('player'), null, 'Unlock does not autoplay');
   assert.equal(challengeReload.get('quest.checkpoint'), 92);
@@ -284,7 +282,10 @@ async function testDailyRest() {
   assert.equal(nextDay.run('playPreset("80mAjV1XUUc")'), false, 'Daily rest also blocks presets on a fresh visit');
   nextDay.advance(240000);
   nextDay.run('tick()');
-  assert.equal(nextDay.run('playPreset("80mAjV1XUUc")'), false, 'Presets stay locked when the timer ends');
+  assert.equal(nextDay.run('playPreset("80mAjV1XUUc")'), true, 'Presets can play after the rest without taps');
+  assert.equal(nextDay.nodes.get('restTapPanel').hidden, true);
+  nextDay.run('backToPresets()');
+  assert.equal(nextDay.nodes.get('restTapCount').textContent, '0 / 500', 'Preset playback does not clear the queue challenge');
 
   const schedule = restAt => new Map([['fischersFocusScheduleV1', JSON.stringify({
     focusAt: Date.parse('2026-11-09T11:29:00Z'), restAt: Date.parse(restAt)
@@ -298,8 +299,12 @@ async function testDailyRest() {
   assert.equal(overnightFocusRest.nodes.get('restRemaining').textContent, '01:00', 'Midnight does not shorten rest still in progress');
   overnightFocusRest.advance(60000);
   overnightFocusRest.run('tick()');
-  assert.equal(overnightFocusRest.nodes.get('restTapCount').textContent, '0 / 500', 'A rest that ends after midnight starts a new challenge');
-  console.log('PASS: daily JST rest, exactly 500 taps, midnight release and overlapping focus rest');
+  assert.equal(overnightFocusRest.nodes.get('restTapPanel').hidden, true, 'A focus rest that ends before 19:00 does not create a challenge');
+  const eveningFocusRest = boot(new Map([['fischersFocusScheduleV1', JSON.stringify({
+    focusAt: Date.parse('2026-11-09T09:59:00Z'), restAt: Date.parse('2026-11-09T10:00:00Z')
+  })]]), '2026-11-09T10:00:00Z');
+  assert.equal(eveningFocusRest.nodes.get('restTapCount').textContent, '0 / 500', 'Focus rest ending at 19:00 creates a challenge');
+  console.log('PASS: evening rest only, exactly 500 taps, saved progress and preset exemption');
 }
 module.exports = { boot, fixtures };
 if (require.main === module) main().then(testDailyRest).catch(error => { console.error(error); process.exitCode = 1; });

@@ -114,11 +114,7 @@ async page => {
   await page.reload({ waitUntil: 'domcontentloaded' });
   check(await page.locator('#restScreen').isVisible(), 'Rest survives reload');
   await page.clock.runFor(60000);
-  check(await page.locator('#restTapButton').isVisible(), 'Focus rest transitions to the tap challenge');
-  await page.locator('#restTapButton').evaluate(button => {
-    for (let i = 0; i < 500; i++) button.click();
-  });
-  check(await page.locator('#restScreen').isHidden(), '500 clicks release the focus-rest lock');
+  check(await page.locator('#restScreen').isHidden() && await page.locator('#restTapPanel').isHidden(), 'Daytime focus rest ends without a tap challenge');
   check(await page.locator('iframe').count() === 0, 'No autoplay after rest');
   await page.locator('#resumeQuest').click();
   await page.locator('#pauseQuest').waitFor();
@@ -147,7 +143,13 @@ async page => {
   check(await page.locator('#restScreen').isVisible(), 'Daily rest survives reload');
   await page.clock.setSystemTime(new Date('2026-11-09T11:35:00Z'));
   await page.clock.runFor(1000);
-  check(await page.locator('#restTapButton').isVisible(), '20:35 JST opens the daily tap challenge');
+  check(await page.locator('#restScreen').isHidden() && await page.locator('#restTapPanel').isHidden(), 'Presets are available again at 20:35');
+  check(await page.locator('iframe').count() === 0 && await checkpoint() === dailyCheckpoint, 'Rest expiry does not autoplay or reset progress');
+  await page.locator('#resumeQuest').click();
+  await page.locator('#pauseQuest').waitFor();
+  await page.locator('#backToPresets').click();
+  check(await page.locator('#restTapButton').isVisible() && await page.locator('#planning').isHidden(), 'Only normal selection remains locked after the daily rest');
+  check(await page.locator('#presetPanel').isVisible(), 'Presets stay accessible alongside the tap challenge');
   await page.screenshot({ path: 'output/playwright/quest-mobile-tap-unlock.png' });
   await page.locator('#restTapButton').evaluate(button => {
     for (let i = 0; i < 499; i++) button.click();
@@ -156,16 +158,7 @@ async page => {
   await page.reload({ waitUntil: 'domcontentloaded' });
   check(await page.locator('#restTapCount').innerText() === '499 / 500', 'Reload keeps the tap count');
   await page.locator('#restTapButton').click();
-  check(await page.locator('#restScreen').isHidden() && await page.locator('#resumeQuest').isEnabled(), 'The 500th tap allows manual resume');
-  check(await page.locator('iframe').count() === 0 && await checkpoint() === dailyCheckpoint, 'Rest expiry does not autoplay or reset progress');
-  await page.clock.setSystemTime(new Date('2026-11-10T14:59:58Z'));
-  await page.clock.runFor(1000);
-  check(await page.locator('#restTapButton').isVisible(), 'The next daily challenge is still required before midnight');
-  await page.clock.setSystemTime(new Date('2026-11-10T15:00:00Z'));
-  await page.clock.runFor(1000);
-  check(await page.locator('#restScreen').isHidden(), 'Midnight JST clears the tap challenge');
-  check(await page.locator('iframe').count() === 0 && await checkpoint() === dailyCheckpoint, 'Midnight does not autoplay or reset progress');
-  await page.locator('#backToPresets').click();
+  check(await page.locator('#restTapPanel').isHidden() && await page.locator('#startQuest').isEnabled(), 'The 500th tap unlocks normal selection');
   await page.clock.setSystemTime(new Date('2026-11-11T10:00:00Z'));
   await page.locator('#startQuest').click();
   await page.locator('#grid .thumb-btn[data-select="' + first + '"]').click();
@@ -178,10 +171,14 @@ async page => {
   check(await page.locator('#playAfterInterval').isDisabled(), 'Reload does not skip the interval');
   await page.clock.setSystemTime(new Date(playAt));
   await page.clock.runFor(1000);
+  check(await page.locator('#restTapButton').isVisible() && await page.locator('#playAfterInterval').isDisabled(), 'Completed interval requires taps before playback');
+  await page.locator('#restTapButton').evaluate(button => {
+    for (let i = 0; i < 500; i++) button.click();
+  });
   check(await page.locator('#playAfterInterval').isEnabled() && await page.locator('iframe').count() === 0, 'Ready after five minutes, without autoplay');
   await page.locator('#playAfterInterval').click();
   await page.locator('#pauseQuest').waitFor();
   check(await page.locator('#intervalPanel').isHidden(), 'Manual play after the interval');
   check(dataApiCalls === 0, 'Preset selection and playback do not call the Data API');
-  console.log('PASS browser: previous locks and nightly five-minute selection interval');
+  console.log('PASS browser: evening tap gates, preset exemption, reload and evening interval');
 }
