@@ -227,35 +227,47 @@ async function main() {
   assert.ok(app.saved.has(KEY));
   console.log('PASS: selection, duration API, seeking/resume, next button, automatic advance, duplicate ends, cooldown, expiry');
 }
-async function testNightViewing() {
-  const night = boot(new Map(), '2026-11-09T11:29:59Z');
-  assert.equal(night.run('isNightViewing()'), false);
-  night.run(`startPlayback([{...PRESET_VIDEOS.get('80mAjV1XUUc')}]);
+async function testDailyRest() {
+  const daily = boot(new Map(), '2026-11-09T11:29:59Z');
+  assert.equal(daily.run('isRestDue()'), false);
+  daily.run(`startPlayback([{...PRESET_VIDEOS.get('80mAjV1XUUc')}]);
     playerReady=true;hasPlayed=true;
     player={getVideoData(){return {video_id:'80mAjV1XUUc'};},getCurrentTime(){return 92;},destroy(){}};
   `);
-  night.advance(1000);
-  night.run('tick()');
-  assert.equal(night.run('isNightViewing()'), true, '20:30 JST is blocked');
-  assert.equal(night.nodes.get('nightScreen').hidden, false);
-  assert.equal(night.nodes.get('resumeQuest').disabled, true);
-  assert.equal(night.get('player'), null);
-  assert.equal(night.get('quest.checkpoint'), 92);
-  const resumed = boot(new Map(night.saved), '2026-11-09T14:59:59Z');
-  assert.equal(resumed.nodes.get('nightScreen').hidden, false, 'Reload is still blocked at 23:59');
+  daily.advance(1000);
+  daily.run('tick()');
+  assert.equal(daily.run('isRestDue()'), true, '20:30 JST starts rest');
+  assert.equal(daily.nodes.get('restScreen').hidden, false);
+  assert.equal(daily.nodes.get('restRemaining').textContent, '05:00');
+  assert.equal(daily.nodes.get('app').inert, true);
+  assert.equal(daily.get('player'), null);
+  assert.equal(daily.get('quest.checkpoint'), 92);
+  const resumed = boot(new Map(daily.saved), '2026-11-09T11:34:59Z');
+  assert.equal(resumed.nodes.get('restRemaining').textContent, '00:01', 'Reload does not restart the countdown');
   await resumed.run('resumeQuest()');
   assert.equal(resumed.get('playerAPI'), null, 'No embedded player is started');
   resumed.advance(1000);
   resumed.run('tick()');
-  assert.equal(resumed.nodes.get('nightScreen').hidden, true, 'Midnight JST releases the blackout');
-  assert.equal(resumed.nodes.get('resumeQuest').disabled, false);
-  assert.equal(resumed.get('player'), null, 'Midnight does not autoplay');
+  assert.equal(resumed.nodes.get('restScreen').hidden, true, '20:35 JST releases the daily rest');
+  assert.equal(resumed.nodes.get('app').inert, false);
+  assert.equal(resumed.get('player'), null, 'Rest expiry does not autoplay');
   assert.equal(resumed.get('quest.checkpoint'), 92);
-  const latePreset = boot(new Map(), '2026-11-10T11:31:00Z');
-  assert.equal(latePreset.run('playPreset("80mAjV1XUUc")'), true);
-  assert.equal(latePreset.nodes.get('nightScreen').hidden, false);
-  assert.equal(latePreset.get('playerAPI'), null, 'Choosing a preset at night cannot start audio or video');
-  console.log('PASS: daily JST cutoff, saved progress, no playback during blackout and manual resume after midnight');
+
+  const nextDay = boot(new Map(), '2026-11-10T11:31:00Z');
+  assert.equal(nextDay.run('playPreset("80mAjV1XUUc")'), false, 'Daily rest also blocks presets on a fresh visit');
+  nextDay.advance(240000);
+  nextDay.run('tick()');
+  assert.equal(nextDay.run('playPreset("80mAjV1XUUc")'), true, 'Presets can play after 20:35');
+
+  const schedule = restAt => new Map([['fischersFocusScheduleV1', JSON.stringify({
+    focusAt: Date.parse('2026-11-09T11:29:00Z'), restAt: Date.parse(restAt)
+  })]]);
+  const shortFocusRest = boot(schedule('2026-11-09T11:31:00Z'), '2026-11-09T11:32:00Z');
+  assert.equal(shortFocusRest.get('focusSchedule'), null);
+  assert.equal(shortFocusRest.nodes.get('restRemaining').textContent, '03:00', 'Daily rest outlasts a shorter focus rest');
+  const longFocusRest = boot(schedule('2026-11-09T11:37:00Z'), '2026-11-09T11:35:00Z');
+  assert.equal(longFocusRest.nodes.get('restRemaining').textContent, '02:00', 'Longer focus rest still applies after the daily window');
+  console.log('PASS: daily JST rest, saved progress, reload, manual resume and overlapping focus rest');
 }
 module.exports = { boot, fixtures };
-if (require.main === module) main().then(testNightViewing).catch(error => { console.error(error); process.exitCode = 1; });
+if (require.main === module) main().then(testDailyRest).catch(error => { console.error(error); process.exitCode = 1; });

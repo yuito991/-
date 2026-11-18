@@ -117,6 +117,7 @@ async page => {
   check(await page.locator('#restScreen').isHidden(), 'Rest ends at the scheduled time');
   check(await page.locator('iframe').count() === 0, 'No autoplay after rest');
   await page.locator('#resumeQuest').click();
+  await page.locator('#pauseQuest').waitFor();
   await page.clock.fastForward(779000);
   check(await page.locator('#playerMessage').innerText() === '再生が終了しました。', 'Preset finished normally');
   check(await page.locator('#watchPresets').isVisible() && await lockUntil() === originalLock, 'Finishing a preset does not extend the cooldown');
@@ -133,17 +134,17 @@ async page => {
   await page.locator('#presetList [data-select="' + workVideo + '"]').click();
   await page.locator('#pauseQuest').waitFor();
   await page.clock.runFor(12000);
-  check(await page.locator('#nightScreen').isVisible(), 'Blackout starts during playback at 20:30 JST');
-  check(await page.locator('iframe').count() === 0 && await page.locator('#resumeQuest').isDisabled(), 'Blackout stops both video and audio');
-  const nightCheckpoint = await checkpoint();
-  check(nightCheckpoint > 0, 'Blackout saves the current position');
-  await page.screenshot({ path: 'output/playwright/quest-mobile-night.png' });
+  check(await page.locator('#restScreen').isVisible(), 'Daily rest starts during playback at 20:30 JST');
+  check(await page.locator('iframe').count() === 0 && await page.locator('#app').evaluate(app => app.inert), 'Daily rest stops playback and blocks the app');
+  const dailyCheckpoint = await checkpoint();
+  check(dailyCheckpoint > 0, 'Daily rest saves the current position');
+  await page.screenshot({ path: 'output/playwright/quest-mobile-daily-rest.png' });
   await page.reload({ waitUntil: 'domcontentloaded' });
-  check(await page.locator('#nightScreen').isVisible(), 'Night blackout survives reload');
-  await page.clock.setSystemTime(new Date('2026-11-09T15:00:00Z'));
+  check(await page.locator('#restScreen').isVisible(), 'Daily rest survives reload');
+  await page.clock.setSystemTime(new Date('2026-11-09T11:35:00Z'));
   await page.clock.runFor(1000);
-  check(await page.locator('#nightScreen').isHidden() && await page.locator('#resumeQuest').isEnabled(), 'Midnight allows manual resume');
-  check(await page.locator('iframe').count() === 0 && await checkpoint() === nightCheckpoint, 'Midnight does not autoplay or reset progress');
+  check(await page.locator('#restScreen').isHidden() && await page.locator('#resumeQuest').isEnabled(), '20:35 JST allows manual resume');
+  check(await page.locator('iframe').count() === 0 && await checkpoint() === dailyCheckpoint, 'Rest expiry does not autoplay or reset progress');
   check(dataApiCalls === 0, 'Preset selection and playback do not call the Data API');
-  console.log('PASS browser: focus and rest, queue cooldown, nightly blackout and manual resume');
+  console.log('PASS browser: focus and rest, queue cooldown, daily five-minute rest and manual resume');
 }

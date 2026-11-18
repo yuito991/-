@@ -821,9 +821,6 @@
     .player-progress { margin: 0; color: var(--accent); font-size: .9rem; font-weight: 800; }
     .player-message { color: var(--muted); padding: 8px 0; min-height: 1.5em; }
     .resume-row { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; }
-    .night-screen { display: grid; align-content: center; gap: 6px; min-height: 200px; aspect-ratio: 16 / 9; padding: 16px; background: #000; color: #e2e7ed; text-align: center; }
-    .night-screen p { margin: 0; }
-    .night-screen p + p { color: #aab4bf; font-size: .85rem; }
     .preset-timer { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding: 12px 0; border-top: 1px solid var(--line); }
     .preset-timer label { font-size: .9rem; font-weight: 700; }
     .preset-timer .input { width: 76px; min-height: 42px; }
@@ -910,10 +907,6 @@
           <div class="player-meta" id="playerMeta"></div>
         </div>
         <div id="playerMount"></div>
-        <div class="night-screen" id="nightScreen" role="status" hidden>
-          <p>夜間の再生停止中</p>
-          <p>日本時間 0:00 に再開できます</p>
-        </div>
       </div>
       <div class="player-message" id="playerMessage" role="status"></div>
       <div class="resume-row">
@@ -1004,7 +997,8 @@
     const COOLDOWN_MS = 30 * 60 * 1000;
     const SELECTION_MS = 10 * 1000;
     const TOKYO_CLOCK = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
-    const NIGHT_START_MINUTE = 20 * 60 + 30;
+    const DAILY_REST_START_MINUTE = 20 * 60 + 30;
+    const DAILY_REST_END_MINUTE = DAILY_REST_START_MINUTE + 5;
     const PRESET_VIDEOS = new Map([
       ['VtKYjNo8IXI', 'ぼっち大学生だったシルクの学校生活を、もう一度...', 583],
       ['ZNWfZclu72c', '【本気】超集中モードで８時間の動画を編集するシルクロード', 779],
@@ -1016,7 +1010,7 @@
       'retryDurations','questList','catalog','setup','apiKey','saveKey','refresh','query',
       'yearFrom','yearTo','libraryFilter','grid','empty','errorBox','candidateCount','refreshCandidates',
       'candidatePanel','candidateHead','candidateHeading','presetPanel','presetHead','presetHeading','presetList','selectionDock','selectionTime','selectionSummary','refreshCandidatesBottom','playSelection',
-      'watchArea','playerProgress','playerTitle','playerMeta','playerMessage','resumeQuest','nightScreen',
+      'watchArea','playerProgress','playerTitle','playerMeta','playerMessage','resumeQuest',
       'pauseQuest','seekForward','retryPlayer','nextVideo','endQuest','backToPresets','watchPresets','watchPresetList','cooldown','lockTitle','lockRemaining','unlockTime',
       'presetTimer','presetTimerFields','presetTimerMinutes','presetRestMinutes','presetTimerCancel','presetTimerRemaining',
       'restScreen','restTitle','restRemaining','restUnlockTime'
@@ -1034,7 +1028,6 @@
     let quest = readQuest();
     let focusSchedule = readFocusSchedule();
     let restApplied = false;
-    let nightScreenActive = null;
     let selectionMessage = '';
     let durationBusy = false;
     let durationTimer = 0;
@@ -1305,27 +1298,18 @@
         return true;
       } catch { showError('タイマーを保存できません。'); return false; }
     }
+    function dailyRestUntil(now) {
+      const [hour, minute] = TOKYO_CLOCK.format(now).split(':').map(Number);
+      const minuteOfDay = hour * 60 + minute;
+      if (minuteOfDay < DAILY_REST_START_MINUTE || minuteOfDay >= DAILY_REST_END_MINUTE) return 0;
+      return Math.floor(now / 60000) * 60000 + (DAILY_REST_END_MINUTE - minuteOfDay) * 60000;
+    }
+    function restDeadline(now) {
+      const focusRest = focusSchedule && now >= focusSchedule.focusAt ? focusSchedule.restAt : 0;
+      return Math.max(dailyRestUntil(now), focusRest);
+    }
     function isRestDue() {
-      return focusSchedule && Date.now() >= focusSchedule.focusAt;
-    }
-    function isNightViewing() {
-      const [hour, minute] = TOKYO_CLOCK.format(Date.now()).split(':').map(Number);
-      return hour * 60 + minute >= NIGHT_START_MINUTE;
-    }
-    function playbackBlocked() {
-      return isRestDue() || isNightViewing();
-    }
-    function updateNightScreen() {
-      const active = quest.phase === 'running' && isNightViewing();
-      if (nightScreenActive === active) return;
-      nightScreenActive = active;
-      if (active) {
-        recordProgress(true);
-        destroyPlayer();
-        resetPlayerControls();
-      }
-      els.nightScreen.hidden = !active;
-      els.resumeQuest.disabled = active || loadingPlayer;
+      return restDeadline(Date.now()) > 0;
     }
     function timerText(deadline) {
       const seconds = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
@@ -1344,7 +1328,7 @@
       }
     }
     function setPresetTimer(focusMinutes, restMinutes) {
-      if (!isPresetPlayback() || focusSchedule
+      if (!isPresetPlayback() || focusSchedule || isRestDue()
         || ![focusMinutes, restMinutes].every(minutes => Number.isInteger(minutes) && minutes >= 1 && minutes <= 1440)) return false;
       const focusAt = Date.now() + focusMinutes * 60000;
       if (!saveFocusSchedule({ focusAt, restAt: focusAt + restMinutes * 60000 })) return false;
@@ -1357,19 +1341,22 @@
       renderPresetTimer();
       return true;
     }
-    function renderRest(active) {
+    function renderRest(deadline) {
+      const active = deadline > 0;
       const opening = active && els.restScreen.hidden;
       els.restScreen.hidden = !active;
       els.app.inert = active;
       document.body.classList.toggle('resting', active);
       if (active) {
-        els.restRemaining.textContent = timerText(focusSchedule.restAt);
-        els.restUnlockTime.textContent = clockTime(focusSchedule.restAt) + ' に終了';
+        els.restRemaining.textContent = timerText(deadline);
+        els.restUnlockTime.textContent = clockTime(deadline) + ' に終了';
         if (opening) els.restTitle.focus();
       }
     }
-    function updateFocusSchedule() {
-      if (isRestDue()) {
+    function updateRest() {
+      const now = Date.now();
+      const deadline = restDeadline(now);
+      if (deadline) {
         if (!restApplied) {
           restApplied = true;
           if (quest.phase === 'running') {
@@ -1382,15 +1369,15 @@
             render();
           }
         }
-        if (Date.now() < focusSchedule.restAt) {
-          renderRest(true);
+        if (focusSchedule && now >= focusSchedule.restAt && !saveFocusSchedule(null)) focusSchedule = null;
+        if (now < deadline) {
+          renderRest(deadline);
           return true;
         }
-        if (!saveFocusSchedule(null)) focusSchedule = null;
       }
       if (restApplied) {
         restApplied = false;
-        renderRest(false);
+        renderRest(0);
         if (quest.phase === 'running') {
           els.playerMessage.textContent = '休憩が終わりました。';
           els.resumeQuest.focus();
@@ -1410,7 +1397,6 @@
     function renderPhase() {
       const watchingPreset = isPresetPlayback();
       renderCooldown();
-      updateNightScreen();
       els.planning.hidden = quest.phase !== 'planning';
       els.catalog.hidden = quest.phase !== 'planning';
       els.watchArea.hidden = quest.phase !== 'running';
@@ -1497,10 +1483,8 @@
       showError('');
       renderPhase();
       els.watchArea.scrollIntoView({ behavior:'auto', block:'start' });
-      if (!playbackBlocked()) {
-        if (playerReady) loadCurrentVideo();
-        else resumeQuest();
-      }
+      if (playerReady) loadCurrentVideo();
+      else resumeQuest();
       return true;
     }
     function loadPlayerAPI() {
@@ -1532,7 +1516,7 @@
       return playerAPI;
     }
     async function resumeQuest() {
-      if (playbackBlocked() || quest.phase !== 'running' || loadingPlayer) return;
+      if (isRestDue() || quest.phase !== 'running' || loadingPlayer) return;
       if (player && !playerReady) return;
       if (playerReady && player) {
         if (quest.presetMode && handledEnd) loadCurrentVideo();
@@ -1545,14 +1529,14 @@
       els.playerMessage.textContent = 'プレイヤーに接続中';
       try {
         await loadPlayerAPI();
-        if (generation !== playerGeneration || playbackBlocked() || quest.phase !== 'running') return;
+        if (generation !== playerGeneration || isRestDue() || quest.phase !== 'running') return;
         const origin = /^https?:$/.test(location.protocol) ? location.origin : undefined;
         player = new window.YT.Player('playerMount', {
           width: '100%', height: '100%',
           playerVars: { playsinline: 1, autoplay: 1, controls: quest.presetMode ? 1 : 0, disablekb: quest.presetMode ? 0 : 1, rel: 0, origin },
           events: {
             onReady: event => {
-              if (event.target !== player || playbackBlocked() || quest.phase !== 'running') return;
+              if (event.target !== player || isRestDue() || quest.phase !== 'running') return;
               playerReady = true;
               const frame = event.target.getIframe();
               frame.classList.add('player-frame');
@@ -1581,7 +1565,7 @@
         if (generation === playerGeneration) els.playerMessage.textContent = error.message;
       } finally {
         loadingPlayer = false;
-        els.resumeQuest.disabled = isNightViewing();
+        els.resumeQuest.disabled = false;
       }
     }
     function currentVideoMatches() {
@@ -1595,7 +1579,7 @@
       els.playerMessage.textContent = message;
     }
     function loadCurrentVideo() {
-      if (playbackBlocked() || !playerReady || quest.phase !== 'running') return;
+      if (isRestDue() || !playerReady || quest.phase !== 'running') return;
       hasPlayed = false;
       handledEnd = false;
       resetPlayerControls();
@@ -1603,7 +1587,7 @@
       player.loadVideoById({ videoId: quest.items[quest.index].id, startSeconds: quest.checkpoint });
     }
     function onPlayerState(event) {
-      if (playbackBlocked() || !currentVideoMatches()) return;
+      if (isRestDue() || !currentVideoMatches()) return;
       if (event.data === 1) {
         hasPlayed = true;
         if (quest.presetMode) handledEnd = false;
@@ -1629,7 +1613,7 @@
       if (forceSave || now - lastProgressSave >= 4000) { saveQuest(); lastProgressSave = now; }
     }
     function seekForward() {
-      if (playbackBlocked() || !hasPlayed || !currentVideoMatches()) return;
+      if (isRestDue() || !hasPlayed || !currentVideoMatches()) return;
       const current = player.getCurrentTime();
       const position = quest.presetMode ? current : Math.max(quest.checkpoint, current);
       const target = Math.min(position + 10, player.getDuration() - 1);
@@ -1696,8 +1680,7 @@
       els.lockTitle.focus();
     }
     function tick() {
-      const resting = updateFocusSchedule();
-      updateNightScreen();
+      const resting = updateRest();
       if (quest.lockedUntil) {
         if (Date.now() >= quest.lockedUntil) {
           const wasLocked = quest.phase === 'locked';
@@ -2028,7 +2011,7 @@
     });
     els.presetTimerCancel.addEventListener('click', cancelPresetTimer);
     els.retryPlayer.addEventListener('click', () => {
-      if (playbackBlocked() || quest.phase !== 'running') return;
+      if (isRestDue() || quest.phase !== 'running') return;
       destroyPlayer();
       resumeQuest();
     });
@@ -2054,7 +2037,7 @@
     window.addEventListener('storage', event => {
       if (event.key === FOCUS_KEY) {
         focusSchedule = readFocusSchedule();
-        updateFocusSchedule();
+        updateRest();
         return;
       }
       if (event.key !== QUEST_KEY && event.key !== LOCK_KEY) return;
@@ -2077,9 +2060,9 @@
     });
     document.addEventListener('visibilitychange', tick);
     els.presetList.innerHTML = [...PRESET_VIDEOS.values()].map(video => presetButton(video)).join('');
-    renderRest(false);
+    renderRest(0);
     restoreCache();
-    updateFocusSchedule();
+    updateRest();
     window.setInterval(tick, 1000);
 
   </script>
