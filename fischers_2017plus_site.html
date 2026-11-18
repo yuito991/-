@@ -830,6 +830,7 @@
     .rest-screen { position: fixed; inset: 0; z-index: 100; display: grid; align-content: center; justify-items: center; gap: 12px; padding: 20px; background: #080b0f; color: #eef2f6; text-align: center; }
     .rest-screen h2, .rest-screen p { margin: 0; }
     .rest-remaining { font-size: 2.5rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .rest-unlock { width: min(100%, 240px); min-height: 56px; touch-action: manipulation; }
     body.resting { overflow: hidden; }
     .cooldown { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; padding: 12px 0; border-block: 1px solid var(--line); }
     .cooldown h2 { margin: 0; font-size: .95rem; font-weight: 600; }
@@ -978,6 +979,8 @@
     <h2 id="restTitle" tabindex="-1">休憩中</h2>
     <p class="rest-remaining" id="restRemaining" role="timer"></p>
     <p id="restUnlockTime"></p>
+    <p class="rest-remaining" id="restTapCount" hidden></p>
+    <button class="button accent rest-unlock" id="restTapButton" type="button" hidden>タップして解除</button>
   </section>
 
   <script>
@@ -990,6 +993,8 @@
     const QUEST_KEY = 'fischersQuestV1';
     const LOCK_KEY = 'fischersQuestLockUntilV1';
     const FOCUS_KEY = 'fischersFocusScheduleV1';
+    const REST_UNLOCK_KEY = 'fischersRestUnlockV1';
+    const REST_UNLOCK_TAPS = 500;
     const LEGACY_CACHE_KEYS = ['fischers2017ViewerCache', 'fischers2017ViewerCacheV2', 'fischers2017ViewerCacheV3', 'fischers2017ViewerCacheV4'];
     const CANDIDATE_COUNT = 5;
     const CACHE_DESCRIPTION_LIMIT = 120;
@@ -1013,7 +1018,7 @@
       'watchArea','playerProgress','playerTitle','playerMeta','playerMessage','resumeQuest',
       'pauseQuest','seekForward','retryPlayer','nextVideo','endQuest','backToPresets','watchPresets','watchPresetList','cooldown','lockTitle','lockRemaining','unlockTime',
       'presetTimer','presetTimerFields','presetTimerMinutes','presetRestMinutes','presetTimerCancel','presetTimerRemaining',
-      'restScreen','restTitle','restRemaining','restUnlockTime'
+      'restScreen','restTitle','restRemaining','restUnlockTime','restTapCount','restTapButton'
     ].map(id => [id, document.getElementById(id)]));
     let allVideos = [];
     let candidateIds = [];
@@ -1027,6 +1032,7 @@
     let state = loadState();
     let quest = readQuest();
     let focusSchedule = readFocusSchedule();
+    let restUnlock = readRestUnlock();
     let restApplied = false;
     let selectionMessage = '';
     let durationBusy = false;
@@ -1168,7 +1174,7 @@
         + '</div></article>';
     }
     function isSelecting() {
-      return !isRestDue() && quest.phase === 'planning' && quest.selectionUntil > Date.now();
+      return !isViewingLocked() && quest.phase === 'planning' && quest.selectionUntil > Date.now();
     }
     function renderSelectionControls(selecting) {
       els.presetPanel.hidden = !(quest.phase === 'locked' || (quest.phase === 'planning' && !quest.selectionUntil));
@@ -1298,18 +1304,36 @@
         return true;
       } catch { showError('タイマーを保存できません。'); return false; }
     }
-    function dailyRestUntil(now) {
+    function dailyRestEndToday(now) {
       const [hour, minute] = TOKYO_CLOCK.format(now).split(':').map(Number);
       const minuteOfDay = hour * 60 + minute;
-      if (minuteOfDay < DAILY_REST_START_MINUTE || minuteOfDay >= DAILY_REST_END_MINUTE) return 0;
       return Math.floor(now / 60000) * 60000 + (DAILY_REST_END_MINUTE - minuteOfDay) * 60000;
     }
-    function restDeadline(now) {
-      const focusRest = focusSchedule && now >= focusSchedule.focusAt ? focusSchedule.restAt : 0;
-      return Math.max(dailyRestUntil(now), focusRest);
+    function latestDailyRestEnd(now) {
+      const today = dailyRestEndToday(now);
+      return now >= today ? today : today - 86400000;
     }
-    function isRestDue() {
-      return restDeadline(Date.now()) > 0;
+    function readRestUnlock() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(REST_UNLOCK_KEY) || 'null');
+        if (saved && Number.isFinite(saved.unlockedThrough) && Number.isFinite(saved.pendingUntil)
+          && Number.isInteger(saved.taps) && saved.taps >= 0 && saved.taps < REST_UNLOCK_TAPS) return saved;
+      } catch {}
+      return null;
+    }
+    function saveRestUnlock(next) {
+      restUnlock = next;
+      try { localStorage.setItem(REST_UNLOCK_KEY, JSON.stringify(next)); } catch {}
+    }
+    function restDeadline(now) {
+      const today = dailyRestEndToday(now);
+      const daily = now >= today - (DAILY_REST_END_MINUTE - DAILY_REST_START_MINUTE) * 60000
+        ? today : today - 86400000;
+      const focusRest = focusSchedule && now >= focusSchedule.focusAt ? focusSchedule.restAt : 0;
+      return Math.max(daily, focusRest, restUnlock.pendingUntil);
+    }
+    function isViewingLocked() {
+      return restDeadline(Date.now()) > restUnlock.unlockedThrough;
     }
     function timerText(deadline) {
       const seconds = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
@@ -1328,7 +1352,7 @@
       }
     }
     function setPresetTimer(focusMinutes, restMinutes) {
-      if (!isPresetPlayback() || focusSchedule || isRestDue()
+      if (!isPresetPlayback() || focusSchedule || isViewingLocked()
         || ![focusMinutes, restMinutes].every(minutes => Number.isInteger(minutes) && minutes >= 1 && minutes <= 1440)) return false;
       const focusAt = Date.now() + focusMinutes * 60000;
       if (!saveFocusSchedule({ focusAt, restAt: focusAt + restMinutes * 60000 })) return false;
@@ -1336,55 +1360,83 @@
       return true;
     }
     function cancelPresetTimer() {
-      if (!isPresetPlayback() || !focusSchedule || isRestDue()) return false;
+      if (!isPresetPlayback() || !focusSchedule || isViewingLocked()) return false;
       if (!saveFocusSchedule(null)) return false;
       renderPresetTimer();
       return true;
     }
     function renderRest(deadline) {
       const active = deadline > 0;
-      const opening = active && els.restScreen.hidden;
+      const waiting = active && Date.now() < deadline;
+      const tapping = active && !waiting;
+      const starting = waiting && els.restRemaining.hidden;
+      const unlocking = tapping && els.restTapButton.hidden;
       els.restScreen.hidden = !active;
+      els.restRemaining.hidden = !waiting;
+      els.restUnlockTime.hidden = !waiting;
+      els.restTapCount.hidden = !tapping;
+      els.restTapButton.hidden = !tapping;
       els.app.inert = active;
       document.body.classList.toggle('resting', active);
-      if (active) {
+      if (waiting) {
+        els.restTitle.textContent = '休憩中';
         els.restRemaining.textContent = timerText(deadline);
         els.restUnlockTime.textContent = clockTime(deadline) + ' に終了';
-        if (opening) els.restTitle.focus();
+        if (starting) els.restTitle.focus();
+      }
+      if (tapping) {
+        els.restTitle.textContent = '解除まで500回';
+        els.restTapCount.textContent = restUnlock.taps + ' / ' + REST_UNLOCK_TAPS;
+        if (unlocking) els.restTapButton.focus();
       }
     }
     function updateRest() {
       const now = Date.now();
       const deadline = restDeadline(now);
-      if (deadline) {
+      const locked = deadline > restUnlock.unlockedThrough;
+      if (locked) {
+        if (deadline !== restUnlock.pendingUntil) {
+          saveRestUnlock({ ...restUnlock, pendingUntil: deadline, taps: 0 });
+        }
         if (!restApplied) {
           restApplied = true;
           if (quest.phase === 'running') {
             recordProgress(true);
             destroyPlayer();
-            resetPlayerControls('休憩後に再生を再開できます。');
+            resetPlayerControls('解除後に再生を再開できます。');
           } else if (quest.phase === 'planning' && quest.selectionUntil) {
             quest.selectionUntil = 0;
             saveQuest();
             render();
           }
         }
-        if (focusSchedule && now >= focusSchedule.restAt && !saveFocusSchedule(null)) focusSchedule = null;
-        if (now < deadline) {
-          renderRest(deadline);
-          return true;
-        }
+      }
+      if (focusSchedule && now >= focusSchedule.restAt && !saveFocusSchedule(null)) focusSchedule = null;
+      if (locked) {
+        renderRest(deadline);
+        return true;
       }
       if (restApplied) {
         restApplied = false;
         renderRest(0);
         if (quest.phase === 'running') {
-          els.playerMessage.textContent = '休憩が終わりました。';
+          els.playerMessage.textContent = 'ロックを解除しました。';
           els.resumeQuest.focus();
         }
       }
       if (isPresetPlayback()) renderPresetTimer();
       return false;
+    }
+    function tapRestUnlock() {
+      const now = Date.now();
+      const deadline = restDeadline(now);
+      if (deadline !== restUnlock.pendingUntil || deadline <= restUnlock.unlockedThrough || now < deadline) return false;
+      const taps = restUnlock.taps + 1;
+      saveRestUnlock(taps === REST_UNLOCK_TAPS
+        ? { unlockedThrough: deadline, pendingUntil: 0, taps: 0 }
+        : { ...restUnlock, taps });
+      updateRest();
+      return true;
     }
     function renderCooldown() {
       const seconds = Math.max(0, Math.ceil((quest.lockedUntil - Date.now()) / 1000));
@@ -1419,7 +1471,7 @@
       return allVideos.some(video => !video.isShort && !PRESET_VIDEOS.has(video.id));
     }
     function beginSelection() {
-      if (isRestDue() || quest.phase !== 'planning' || isSelecting()) return;
+      if (isViewingLocked() || quest.phase !== 'planning' || isSelecting()) return;
       if (!quest.items.length && !hasQueueCandidates()) return;
       if (quest.selectionUntil && !quest.items.some(v => durationErrors.has(v.id))) return;
       const previousDeadline = quest.selectionUntil;
@@ -1434,7 +1486,7 @@
       els.candidateHead.scrollIntoView({ behavior: 'auto', block: 'start' });
     }
     function finishSelectionIfDue() {
-      if (isRestDue()) return false;
+      if (isViewingLocked()) return false;
       if (quest.phase !== 'planning' || !quest.selectionUntil || isSelecting()) return false;
       if (!quest.items.length) {
         quest.selectionUntil = 0;
@@ -1458,7 +1510,7 @@
       return startPlayback([{ ...video }], true);
     }
     function backToPresets() {
-      if (isRestDue() || quest.phase !== 'running' || !quest.presetMode) return false;
+      if (isViewingLocked() || quest.phase !== 'running' || !quest.presetMode) return false;
       const previousQuest = quest;
       quest = previousQuest.lockedUntil > Date.now()
         ? { ...emptyQuest(), phase: 'locked', lockedUntil: previousQuest.lockedUntil } : emptyQuest();
@@ -1475,7 +1527,7 @@
       return true;
     }
     function startPlayback(items, presetMode = false) {
-      if (isRestDue() || !items.length || items.some(v => !v.durationSeconds)) return false;
+      if (isViewingLocked() || !items.length || items.some(v => !v.durationSeconds)) return false;
       const previousQuest = quest;
       const lockedUntil = presetMode ? previousQuest.lockedUntil : 0;
       quest = { ...emptyQuest(), phase: 'running', items, presetMode, lockedUntil };
@@ -1516,7 +1568,7 @@
       return playerAPI;
     }
     async function resumeQuest() {
-      if (isRestDue() || quest.phase !== 'running' || loadingPlayer) return;
+      if (isViewingLocked() || quest.phase !== 'running' || loadingPlayer) return;
       if (player && !playerReady) return;
       if (playerReady && player) {
         if (quest.presetMode && handledEnd) loadCurrentVideo();
@@ -1529,14 +1581,14 @@
       els.playerMessage.textContent = 'プレイヤーに接続中';
       try {
         await loadPlayerAPI();
-        if (generation !== playerGeneration || isRestDue() || quest.phase !== 'running') return;
+        if (generation !== playerGeneration || isViewingLocked() || quest.phase !== 'running') return;
         const origin = /^https?:$/.test(location.protocol) ? location.origin : undefined;
         player = new window.YT.Player('playerMount', {
           width: '100%', height: '100%',
           playerVars: { playsinline: 1, autoplay: 1, controls: quest.presetMode ? 1 : 0, disablekb: quest.presetMode ? 0 : 1, rel: 0, origin },
           events: {
             onReady: event => {
-              if (event.target !== player || isRestDue() || quest.phase !== 'running') return;
+              if (event.target !== player || isViewingLocked() || quest.phase !== 'running') return;
               playerReady = true;
               const frame = event.target.getIframe();
               frame.classList.add('player-frame');
@@ -1579,7 +1631,7 @@
       els.playerMessage.textContent = message;
     }
     function loadCurrentVideo() {
-      if (isRestDue() || !playerReady || quest.phase !== 'running') return;
+      if (isViewingLocked() || !playerReady || quest.phase !== 'running') return;
       hasPlayed = false;
       handledEnd = false;
       resetPlayerControls();
@@ -1587,7 +1639,7 @@
       player.loadVideoById({ videoId: quest.items[quest.index].id, startSeconds: quest.checkpoint });
     }
     function onPlayerState(event) {
-      if (isRestDue() || !currentVideoMatches()) return;
+      if (isViewingLocked() || !currentVideoMatches()) return;
       if (event.data === 1) {
         hasPlayed = true;
         if (quest.presetMode) handledEnd = false;
@@ -1613,7 +1665,7 @@
       if (forceSave || now - lastProgressSave >= 4000) { saveQuest(); lastProgressSave = now; }
     }
     function seekForward() {
-      if (isRestDue() || !hasPlayed || !currentVideoMatches()) return;
+      if (isViewingLocked() || !hasPlayed || !currentVideoMatches()) return;
       const current = player.getCurrentTime();
       const position = quest.presetMode ? current : Math.max(quest.checkpoint, current);
       const target = Math.min(position + 10, player.getDuration() - 1);
@@ -1623,7 +1675,7 @@
       saveQuest();
     }
     function advanceQuest() {
-      if (isRestDue() || quest.phase !== 'running' || quest.index + 1 >= quest.items.length) return false;
+      if (isViewingLocked() || quest.phase !== 'running' || quest.index + 1 >= quest.items.length) return false;
       quest.index += 1;
       quest.checkpoint = 0;
       saveQuest();
@@ -1632,7 +1684,7 @@
       return true;
     }
     function canEndQuest() {
-      return !isRestDue() && quest.phase === 'running' && !quest.presetMode && quest.index === quest.items.length - 1;
+      return !isViewingLocked() && quest.phase === 'running' && !quest.presetMode && quest.index === quest.items.length - 1;
     }
     function endQuest() {
       if (!canEndQuest()) return false;
@@ -2010,8 +2062,12 @@
       setPresetTimer(Number(els.presetTimerMinutes.value), Number(els.presetRestMinutes.value));
     });
     els.presetTimerCancel.addEventListener('click', cancelPresetTimer);
+    els.restTapButton.addEventListener('click', tapRestUnlock);
+    els.restTapButton.addEventListener('keydown', event => {
+      if (event.repeat && (event.key === 'Enter' || event.key === ' ')) event.preventDefault();
+    });
     els.retryPlayer.addEventListener('click', () => {
-      if (isRestDue() || quest.phase !== 'running') return;
+      if (isViewingLocked() || quest.phase !== 'running') return;
       destroyPlayer();
       resumeQuest();
     });
@@ -2035,6 +2091,12 @@
     els.refreshCandidatesBottom.addEventListener('click', redrawCandidateList);
     window.addEventListener('pagehide', () => { if (quest.phase === 'running') { recordProgress(); saveQuest(); } });
     window.addEventListener('storage', event => {
+      if (event.key === REST_UNLOCK_KEY) {
+        const saved = readRestUnlock();
+        if (saved) restUnlock = saved;
+        updateRest();
+        return;
+      }
       if (event.key === FOCUS_KEY) {
         focusSchedule = readFocusSchedule();
         updateRest();
@@ -2060,6 +2122,7 @@
     });
     document.addEventListener('visibilitychange', tick);
     els.presetList.innerHTML = [...PRESET_VIDEOS.values()].map(video => presetButton(video)).join('');
+    if (!restUnlock) saveRestUnlock({ unlockedThrough: latestDailyRestEnd(Date.now()), pendingUntil: 0, taps: 0 });
     renderRest(0);
     restoreCache();
     updateRest();

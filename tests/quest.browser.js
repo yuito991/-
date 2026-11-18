@@ -114,7 +114,11 @@ async page => {
   await page.reload({ waitUntil: 'domcontentloaded' });
   check(await page.locator('#restScreen').isVisible(), 'Rest survives reload');
   await page.clock.runFor(60000);
-  check(await page.locator('#restScreen').isHidden(), 'Rest ends at the scheduled time');
+  check(await page.locator('#restTapButton').isVisible(), 'Focus rest transitions to the tap challenge');
+  await page.locator('#restTapButton').evaluate(button => {
+    for (let i = 0; i < 500; i++) button.click();
+  });
+  check(await page.locator('#restScreen').isHidden(), '500 clicks release the focus-rest lock');
   check(await page.locator('iframe').count() === 0, 'No autoplay after rest');
   await page.locator('#resumeQuest').click();
   await page.locator('#pauseQuest').waitFor();
@@ -143,8 +147,17 @@ async page => {
   check(await page.locator('#restScreen').isVisible(), 'Daily rest survives reload');
   await page.clock.setSystemTime(new Date('2026-11-09T11:35:00Z'));
   await page.clock.runFor(1000);
-  check(await page.locator('#restScreen').isHidden() && await page.locator('#resumeQuest').isEnabled(), '20:35 JST allows manual resume');
+  check(await page.locator('#restTapButton').isVisible(), '20:35 JST opens the daily tap challenge');
+  await page.screenshot({ path: 'output/playwright/quest-mobile-tap-unlock.png' });
+  await page.locator('#restTapButton').evaluate(button => {
+    for (let i = 0; i < 499; i++) button.click();
+  });
+  check(await page.locator('#restTapCount').innerText() === '499 / 500', '499 taps do not unlock');
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  check(await page.locator('#restTapCount').innerText() === '499 / 500', 'Reload keeps the tap count');
+  await page.locator('#restTapButton').click();
+  check(await page.locator('#restScreen').isHidden() && await page.locator('#resumeQuest').isEnabled(), 'The 500th tap allows manual resume');
   check(await page.locator('iframe').count() === 0 && await checkpoint() === dailyCheckpoint, 'Rest expiry does not autoplay or reset progress');
   check(dataApiCalls === 0, 'Preset selection and playback do not call the Data API');
-  console.log('PASS browser: focus and rest, queue cooldown, daily five-minute rest and manual resume');
+  console.log('PASS browser: focus rest, daily rest, tap challenge, reload and manual resume');
 }

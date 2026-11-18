@@ -199,6 +199,7 @@ async function main() {
   assert.equal(direct.get('player'), null, 'Rest removes the player at focus expiry');
   assert.equal(direct.get('quest.checkpoint'), 40);
   assert.equal(direct.nodes.get('restRemaining').textContent, '02:00');
+  assert.equal(direct.run('tapRestUnlock()'), false, 'Taps before rest ends do not count');
   assert.equal(direct.nodes.get('app').inert, true);
   assert.equal(direct.run('backToPresets()'), false);
   assert.equal(direct.run('playPreset("ZNWfZclu72c")'), false, 'Other presets cannot open during rest');
@@ -210,6 +211,9 @@ async function main() {
   direct.advance(120000);
   direct.run('tick()');
   assert.equal(direct.get('focusSchedule'), null);
+  assert.equal(direct.nodes.get('restTapButton').hidden, false, 'Focus rest opens the challenge');
+  assert.equal(direct.nodes.get('app').inert, true);
+  direct.run('for(let i=0;i<500;i++) tapRestUnlock()');
   assert.equal(direct.nodes.get('restScreen').hidden, true);
   assert.equal(direct.get('player'), null, 'Rest expiry does not autoplay');
   assert.equal(direct.saved.has(LOCK), false);
@@ -229,14 +233,14 @@ async function main() {
 }
 async function testDailyRest() {
   const daily = boot(new Map(), '2026-11-09T11:29:59Z');
-  assert.equal(daily.run('isRestDue()'), false);
+  assert.equal(daily.run('isViewingLocked()'), false);
   daily.run(`startPlayback([{...PRESET_VIDEOS.get('80mAjV1XUUc')}]);
     playerReady=true;hasPlayed=true;
     player={getVideoData(){return {video_id:'80mAjV1XUUc'};},getCurrentTime(){return 92;},destroy(){}};
   `);
   daily.advance(1000);
   daily.run('tick()');
-  assert.equal(daily.run('isRestDue()'), true, '20:30 JST starts rest');
+  assert.equal(daily.run('isViewingLocked()'), true, '20:30 JST starts rest');
   assert.equal(daily.nodes.get('restScreen').hidden, false);
   assert.equal(daily.nodes.get('restRemaining').textContent, '05:00');
   assert.equal(daily.nodes.get('app').inert, true);
@@ -248,16 +252,28 @@ async function testDailyRest() {
   assert.equal(resumed.get('playerAPI'), null, 'No embedded player is started');
   resumed.advance(1000);
   resumed.run('tick()');
-  assert.equal(resumed.nodes.get('restScreen').hidden, true, '20:35 JST releases the daily rest');
-  assert.equal(resumed.nodes.get('app').inert, false);
-  assert.equal(resumed.get('player'), null, 'Rest expiry does not autoplay');
-  assert.equal(resumed.get('quest.checkpoint'), 92);
+  assert.equal(resumed.nodes.get('restTapCount').textContent, '0 / 500');
+  resumed.run('for(let i=0;i<499;i++) tapRestUnlock()');
+  assert.equal(resumed.nodes.get('app').inert, true, '499 taps are not enough');
+  const challengeReload = boot(new Map(resumed.saved), '2026-11-09T11:36:00Z');
+  assert.equal(challengeReload.nodes.get('restTapCount').textContent, '499 / 500');
+  assert.equal(challengeReload.run('playPreset("80mAjV1XUUc")'), false);
+  assert.equal(challengeReload.run('startPlayback(quest.items)'), false, 'Resuming from the queue is blocked too');
+  challengeReload.run('tapRestUnlock()');
+  assert.equal(challengeReload.nodes.get('restScreen').hidden, true, 'Exactly 500 taps release the lock');
+  assert.equal(challengeReload.nodes.get('app').inert, false);
+  assert.equal(challengeReload.get('player'), null, 'Unlock does not autoplay');
+  assert.equal(challengeReload.get('quest.checkpoint'), 92);
+  const unlockedReload = boot(new Map(challengeReload.saved), '2026-11-09T11:37:00Z');
+  assert.equal(unlockedReload.run('isViewingLocked()'), false, 'Reload does not repeat the same challenge');
+  const closedDuringRest = boot(new Map(challengeReload.saved), '2026-11-10T11:36:00Z');
+  assert.equal(closedDuringRest.nodes.get('restTapCount').textContent, '0 / 500', 'The next daily challenge applies even if the app was closed at 20:30');
 
   const nextDay = boot(new Map(), '2026-11-10T11:31:00Z');
   assert.equal(nextDay.run('playPreset("80mAjV1XUUc")'), false, 'Daily rest also blocks presets on a fresh visit');
   nextDay.advance(240000);
   nextDay.run('tick()');
-  assert.equal(nextDay.run('playPreset("80mAjV1XUUc")'), true, 'Presets can play after 20:35');
+  assert.equal(nextDay.run('playPreset("80mAjV1XUUc")'), false, 'Presets stay locked when the timer ends');
 
   const schedule = restAt => new Map([['fischersFocusScheduleV1', JSON.stringify({
     focusAt: Date.parse('2026-11-09T11:29:00Z'), restAt: Date.parse(restAt)
@@ -267,7 +283,7 @@ async function testDailyRest() {
   assert.equal(shortFocusRest.nodes.get('restRemaining').textContent, '03:00', 'Daily rest outlasts a shorter focus rest');
   const longFocusRest = boot(schedule('2026-11-09T11:37:00Z'), '2026-11-09T11:35:00Z');
   assert.equal(longFocusRest.nodes.get('restRemaining').textContent, '02:00', 'Longer focus rest still applies after the daily window');
-  console.log('PASS: daily JST rest, saved progress, reload, manual resume and overlapping focus rest');
+  console.log('PASS: daily JST rest, exactly 500 taps, persistence and overlapping focus rest');
 }
 module.exports = { boot, fixtures };
 if (require.main === module) main().then(testDailyRest).catch(error => { console.error(error); process.exitCode = 1; });
