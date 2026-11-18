@@ -158,6 +158,13 @@ async page => {
   await page.locator('#restTapButton').click();
   check(await page.locator('#restScreen').isHidden() && await page.locator('#resumeQuest').isEnabled(), 'The 500th tap allows manual resume');
   check(await page.locator('iframe').count() === 0 && await checkpoint() === dailyCheckpoint, 'Rest expiry does not autoplay or reset progress');
+  await page.clock.setSystemTime(new Date('2026-11-10T14:59:58Z'));
+  await page.clock.runFor(1000);
+  check(await page.locator('#restTapButton').isVisible(), 'The next daily challenge is still required before midnight');
+  await page.clock.setSystemTime(new Date('2026-11-10T15:00:00Z'));
+  await page.clock.runFor(1000);
+  check(await page.locator('#restScreen').isHidden(), 'Midnight JST clears the tap challenge');
+  check(await page.locator('iframe').count() === 0 && await checkpoint() === dailyCheckpoint, 'Midnight does not autoplay or reset progress');
   check(dataApiCalls === 0, 'Preset selection and playback do not call the Data API');
-  console.log('PASS browser: focus rest, daily rest, tap challenge, reload and manual resume');
+  console.log('PASS browser: focus rest, daily rest, tap challenge, midnight release and manual resume');
 }

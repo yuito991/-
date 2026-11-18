@@ -259,6 +259,17 @@ async function testDailyRest() {
   assert.equal(challengeReload.nodes.get('restTapCount').textContent, '499 / 500');
   assert.equal(challengeReload.run('playPreset("80mAjV1XUUc")'), false);
   assert.equal(challengeReload.run('startPlayback(quest.items)'), false, 'Resuming from the queue is blocked too');
+  const midnight = boot(new Map(challengeReload.saved), '2026-11-09T14:59:59Z');
+  assert.equal(midnight.nodes.get('restTapCount').textContent, '499 / 500', 'Still locked at 23:59:59 JST');
+  midnight.advance(1000);
+  midnight.run('tick()');
+  assert.equal(midnight.nodes.get('restScreen').hidden, true, 'Midnight releases an unfinished tap challenge');
+  assert.equal(midnight.nodes.get('app').inert, false);
+  assert.equal(midnight.get('restUnlock.taps'), 0);
+  assert.equal(midnight.get('player'), null, 'Midnight does not autoplay');
+  assert.equal(midnight.get('quest.checkpoint'), 92);
+  const reopenedAtMidnight = boot(new Map(challengeReload.saved), '2026-11-09T15:00:00Z');
+  assert.equal(reopenedAtMidnight.run('isViewingLocked()'), false, 'Closing and reopening after midnight also releases it');
   challengeReload.run('tapRestUnlock()');
   assert.equal(challengeReload.nodes.get('restScreen').hidden, true, 'Exactly 500 taps release the lock');
   assert.equal(challengeReload.nodes.get('app').inert, false);
@@ -283,7 +294,12 @@ async function testDailyRest() {
   assert.equal(shortFocusRest.nodes.get('restRemaining').textContent, '03:00', 'Daily rest outlasts a shorter focus rest');
   const longFocusRest = boot(schedule('2026-11-09T11:37:00Z'), '2026-11-09T11:35:00Z');
   assert.equal(longFocusRest.nodes.get('restRemaining').textContent, '02:00', 'Longer focus rest still applies after the daily window');
-  console.log('PASS: daily JST rest, exactly 500 taps, persistence and overlapping focus rest');
+  const overnightFocusRest = boot(schedule('2026-11-09T15:01:00Z'), '2026-11-09T15:00:00Z');
+  assert.equal(overnightFocusRest.nodes.get('restRemaining').textContent, '01:00', 'Midnight does not shorten rest still in progress');
+  overnightFocusRest.advance(60000);
+  overnightFocusRest.run('tick()');
+  assert.equal(overnightFocusRest.nodes.get('restTapCount').textContent, '0 / 500', 'A rest that ends after midnight starts a new challenge');
+  console.log('PASS: daily JST rest, exactly 500 taps, midnight release and overlapping focus rest');
 }
 module.exports = { boot, fixtures };
 if (require.main === module) main().then(testDailyRest).catch(error => { console.error(error); process.exitCode = 1; });
