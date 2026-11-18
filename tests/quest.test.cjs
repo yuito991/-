@@ -14,7 +14,7 @@ const fixtures = ['aaaaaaaaaaa', 'bbbbbbbbbbb'].map((id, index) => ({
   thumbnail: 'https://i.ytimg.com/vi/' + id + '/hqdefault.jpg'
 }));
 
-function boot(saved = new Map(), startAt = '2026-11-09T10:59:00Z') {
+function boot(saved = new Map(), startAt = '2026-11-09T09:59:00Z') {
   let now = new Date(startAt).getTime();
   const nodes = new Map();
   function element(id) {
@@ -59,7 +59,7 @@ async function main() {
   await app.run('loadDurations()');
   assert.equal(app.nodes.get('totalDuration').textContent, '3分10秒');
   assert.equal(app.nodes.get('startQuest').disabled, false);
-  assert.match(app.nodes.get('finishTime').textContent, /11\/9.*20:02/);
+  assert.match(app.nodes.get('finishTime').textContent, /11\/9.*19:02/);
   assert.match(app.run('clockTime(Date.parse("2026-11-09T15:02:00Z"))'), /11\/10.*00:02/);
   app.run('changeQueue("bbbbbbbbbbb","up")');
   assert.deepEqual(app.get('quest.items.map(v=>v.id)'), ['bbbbbbbbbbb', 'aaaaaaaaaaa']);

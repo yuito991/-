@@ -4,7 +4,7 @@ async page => {
   const second = 'bbbbbbbbbbb';
   const secondPreset = 'ZNWfZclu72c';
   const workVideo = '80mAjV1XUUc';
-  await page.clock.install({ time: new Date('2026-11-09T10:00:00Z') });
+  await page.clock.install({ time: new Date('2026-11-09T09:00:00Z') });
   await page.addInitScript(({ first, second }) => {
     localStorage.setItem('fischers2017ViewerCacheV5', JSON.stringify({
       videos: [
@@ -165,6 +165,23 @@ async page => {
   await page.clock.runFor(1000);
   check(await page.locator('#restScreen').isHidden(), 'Midnight JST clears the tap challenge');
   check(await page.locator('iframe').count() === 0 && await checkpoint() === dailyCheckpoint, 'Midnight does not autoplay or reset progress');
+  await page.locator('#backToPresets').click();
+  await page.clock.setSystemTime(new Date('2026-11-11T10:00:00Z'));
+  await page.locator('#startQuest').click();
+  await page.locator('#grid .thumb-btn[data-select="' + first + '"]').click();
+  await page.locator('#playSelection').click();
+  check(await page.locator('#intervalPanel').isVisible(), 'Evening selection opens the interval');
+  check(await page.locator('#playAfterInterval').isDisabled() && await page.locator('iframe').count() === 0, 'No playback during the interval');
+  await page.screenshot({ path: 'output/playwright/quest-mobile-evening-interval.png' });
+  const playAt = await page.evaluate(() => JSON.parse(localStorage.getItem('fischersQuestV1')).playAfter);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  check(await page.locator('#playAfterInterval').isDisabled(), 'Reload does not skip the interval');
+  await page.clock.setSystemTime(new Date(playAt));
+  await page.clock.runFor(1000);
+  check(await page.locator('#playAfterInterval').isEnabled() && await page.locator('iframe').count() === 0, 'Ready after five minutes, without autoplay');
+  await page.locator('#playAfterInterval').click();
+  await page.locator('#pauseQuest').waitFor();
+  check(await page.locator('#intervalPanel').isHidden(), 'Manual play after the interval');
   check(dataApiCalls === 0, 'Preset selection and playback do not call the Data API');
-  console.log('PASS browser: focus rest, daily rest, tap challenge, midnight release and manual resume');
+  console.log('PASS browser: previous locks and nightly five-minute selection interval');
 }

@@ -4,8 +4,8 @@ const { boot, fixtures } = require('./quest.test.cjs');
 const KEY = 'fischersQuestV1';
 const CACHE = 'fischers2017ViewerCacheV5';
 
-function setup() {
-  return boot(new Map([[CACHE, JSON.stringify({ videos: fixtures, archiveComplete: true })]]));
+function setup(startAt) {
+  return boot(new Map([[CACHE, JSON.stringify({ videos: fixtures, archiveComplete: true })]]), startAt);
 }
 
 async function main() {
@@ -51,6 +51,44 @@ async function main() {
   assert.equal(pending.nodes.get('selectionDock').hidden, true);
   assert.equal(pending.nodes.get('cooldown').hidden, true);
   console.log('PASS: timed start, no reset from reroll/reload, no selection after expiry, wait for duration then play');
+
+  const evening = setup('2026-11-09T10:00:00Z');
+  evening.run('beginSelection();selectVideo("aaaaaaaaaaa");els.apiKey.value="test-key";');
+  await evening.run('loadDurations()');
+  assert.equal(evening.run('startQuest()'), true, '19:00 JST starts the interval');
+  assert.equal(evening.get('quest.phase'), 'waiting');
+  assert.equal(evening.nodes.get('intervalRemaining').textContent, '05:00');
+  assert.equal(evening.nodes.get('playAfterInterval').disabled, true);
+  assert.equal(evening.run('playAfterInterval()'), false);
+  assert.equal(evening.get('playerAPI'), null);
+  const waitDeadline = evening.get('quest.playAfter');
+  const waitingReload = boot(new Map(evening.saved), '2026-11-09T10:04:59Z');
+  assert.equal(waitingReload.get('quest.playAfter'), waitDeadline, 'Reload preserves the playback deadline');
+  assert.equal(waitingReload.nodes.get('intervalRemaining').textContent, '00:01');
+  assert.equal(waitingReload.run('playAfterInterval()'), false);
+  waitingReload.advance(1000);
+  waitingReload.run('tick()');
+  assert.equal(waitingReload.nodes.get('playAfterInterval').disabled, false);
+  assert.equal(waitingReload.get('quest.phase'), 'waiting', 'Nothing autoplays at the end of the interval');
+  assert.equal(waitingReload.run('resumeQuest=()=>{};playAfterInterval()'), true);
+  assert.equal(waitingReload.get('quest.phase'), 'running');
+  assert.deepEqual(waitingReload.get('quest.items.map(v=>v.id)'), ['aaaaaaaaaaa']);
+
+  const afterSelection = setup('2026-11-09T11:29:45Z');
+  afterSelection.run('beginSelection();selectVideo("aaaaaaaaaaa");els.apiKey.value="test-key";');
+  await afterSelection.run('loadDurations()');
+  afterSelection.advance(10000);
+  afterSelection.run('tick()');
+  assert.equal(afterSelection.get('quest.phase'), 'waiting', 'Selection timeout also applies the evening interval');
+  afterSelection.advance(315000);
+  afterSelection.run('tick()');
+  assert.equal(afterSelection.run('playAfterInterval()'), false, 'The evening interval cannot bypass the daily rest');
+  assert.equal(afterSelection.nodes.get('app').inert, true);
+
+  const preset = setup('2026-11-09T10:00:00Z');
+  assert.equal(preset.run('resumeQuest=()=>{};playPreset("80mAjV1XUUc")'), true);
+  assert.equal(preset.get('quest.phase'), 'running', 'Evening delay does not apply to a direct preset');
+  console.log('PASS: evening interval, saved deadline, manual start, daily rest priority and preset exemption');
 }
 
 main().catch(error => { console.error(error); process.exitCode = 1; });

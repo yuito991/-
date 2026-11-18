@@ -836,6 +836,10 @@
     .cooldown h2 { margin: 0; font-size: .95rem; font-weight: 600; }
     .cooldown-time { margin: 0; font-size: 1.25rem; font-weight: 800; font-variant-numeric: tabular-nums; }
     .cooldown p:last-child { margin: 0; color: var(--muted); font-size: .8rem; }
+    .interval-panel { display: grid; justify-items: start; gap: 10px; padding: 18px 0; border-block: 1px solid var(--line); }
+    .interval-panel h2, .interval-panel p { margin: 0; overflow-wrap: anywhere; }
+    .interval-panel h2 { font-size: 1.1rem; }
+    .interval-panel .resume-row { margin: 4px 0 0; }
     body.site-locked { color-scheme: dark; --ink: #eef2f6; --muted: #abb7c4; --panel: #111820; --line: #34414f; background: #000; }
     button:disabled { cursor: not-allowed; opacity: .5; }
     button:focus-visible, a:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 3px; }
@@ -899,6 +903,15 @@
       <p class="quest-note" id="queueNote" role="status"></p>
       <button class="button secondary" id="retryDurations" type="button" hidden>動画時間を再取得</button>
       <ol class="quest-list" id="questList"></ol>
+    </section>
+    <section class="interval-panel" id="intervalPanel" aria-labelledby="intervalTitle" hidden>
+      <h2 id="intervalTitle" tabindex="-1">再生までのインターバル</h2>
+      <p id="intervalVideoTitle"></p>
+      <p class="cooldown-time" id="intervalRemaining" role="timer"></p>
+      <div class="resume-row">
+        <button class="button accent" id="playAfterInterval" type="button" disabled>再生する</button>
+        <button class="button secondary" id="cancelInterval" type="button">選択を取り消す</button>
+      </div>
     </section>
     <section class="watch-area" id="watchArea" hidden aria-label="クエスト再生">
       <div class="player-panel">
@@ -1001,6 +1014,8 @@
     const AUTO_REFRESH_MS = 12 * 60 * 60 * 1000;
     const COOLDOWN_MS = 30 * 60 * 1000;
     const SELECTION_MS = 10 * 1000;
+    const EVENING_START_MINUTE = 19 * 60;
+    const EVENING_INTERVAL_MS = 5 * 60 * 1000;
     const TOKYO_CLOCK = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
     const DAILY_REST_START_MINUTE = 20 * 60 + 30;
     const DAILY_REST_END_MINUTE = DAILY_REST_START_MINUTE + 5;
@@ -1016,6 +1031,7 @@
       'yearFrom','yearTo','libraryFilter','grid','empty','errorBox','candidateCount','refreshCandidates',
       'candidatePanel','candidateHead','candidateHeading','presetPanel','presetHead','presetHeading','presetList','selectionDock','selectionTime','selectionSummary','refreshCandidatesBottom','playSelection',
       'watchArea','playerProgress','playerTitle','playerMeta','playerMessage','resumeQuest',
+      'intervalPanel','intervalTitle','intervalVideoTitle','intervalRemaining','playAfterInterval','cancelInterval',
       'pauseQuest','seekForward','retryPlayer','nextVideo','endQuest','backToPresets','watchPresets','watchPresetList','cooldown','lockTitle','lockRemaining','unlockTime',
       'presetTimer','presetTimerFields','presetTimerMinutes','presetRestMinutes','presetTimerCancel','presetTimerRemaining',
       'restScreen','restTitle','restRemaining','restUnlockTime','restTapCount','restTapButton'
@@ -1063,7 +1079,7 @@
       } catch { showError('視聴状態を保存できません。ブラウザの保存容量を確認してください。'); }
     }
     function emptyQuest() {
-      return { phase: 'planning', items: [], index: 0, checkpoint: 0, lockedUntil: 0, selectionUntil: 0, presetMode: false };
+      return { phase: 'planning', items: [], index: 0, checkpoint: 0, lockedUntil: 0, selectionUntil: 0, playAfter: 0, presetMode: false };
     }
     function readQuest() {
       try {
@@ -1073,11 +1089,15 @@
         const items = (Array.isArray(data?.items) ? data.items : [])
           .filter(v => v && /^[A-Za-z0-9_-]{11}$/.test(v.id) && typeof v.title === 'string')
           .map(v => ({ ...v, durationSeconds: Number(v.durationSeconds) > 0 ? Number(v.durationSeconds) : PRESET_VIDEOS.get(v.id)?.durationSeconds || null }));
-        const running = data?.phase === 'running' && items.length && items.every(v => v.durationSeconds > 0)
+        const ready = items.length > 0 && items.every(v => v.durationSeconds > 0);
+        const running = data?.phase === 'running' && ready
           && Number.isInteger(data.index) && data.index >= 0 && data.index < items.length;
         const presetMode = Boolean(running && data.presetMode === true && items.length === 1 && PRESET_VIDEOS.has(items[0].id));
         if (lockedUntil && !presetMode) return { ...emptyQuest(), phase: 'locked', lockedUntil };
         if (!data || data.phase === 'locked') return emptyQuest();
+        if (data.phase === 'waiting' && ready && Number.isFinite(data.playAfter) && data.playAfter > 0) {
+          return { ...emptyQuest(), phase: 'waiting', items, playAfter: data.playAfter };
+        }
         const selectionUntil = Number(data.selectionUntil);
         return { ...emptyQuest(), items, phase: running ? 'running' : 'planning', lockedUntil,
           presetMode,
@@ -1304,10 +1324,12 @@
         return true;
       } catch { showError('タイマーを保存できません。'); return false; }
     }
-    function dailyRestEndToday(now) {
+    function tokyoMinuteOfDay(now) {
       const [hour, minute] = TOKYO_CLOCK.format(now).split(':').map(Number);
-      const minuteOfDay = hour * 60 + minute;
-      return Math.floor(now / 60000) * 60000 + (DAILY_REST_END_MINUTE - minuteOfDay) * 60000;
+      return hour * 60 + minute;
+    }
+    function dailyRestEndToday(now) {
+      return Math.floor(now / 60000) * 60000 + (DAILY_REST_END_MINUTE - tokyoMinuteOfDay(now)) * 60000;
     }
     function latestDailyRestEnd(now) {
       const today = dailyRestEndToday(now);
@@ -1456,6 +1478,11 @@
       renderCooldown();
       els.planning.hidden = quest.phase !== 'planning';
       els.catalog.hidden = quest.phase !== 'planning';
+      els.intervalPanel.hidden = quest.phase !== 'waiting';
+      if (quest.phase === 'waiting') {
+        els.intervalVideoTitle.textContent = quest.items[0].title;
+        renderInterval();
+      }
       els.watchArea.hidden = quest.phase !== 'running';
       els.backToPresets.hidden = !watchingPreset;
       els.watchPresets.hidden = !watchingPreset;
@@ -1504,8 +1531,35 @@
       return true;
     }
     function startQuest() {
-      if (quest.phase !== 'planning' || !quest.selectionUntil || durationBusy) return false;
+      if (isViewingLocked() || quest.phase !== 'planning' || !quest.selectionUntil || durationBusy
+        || !quest.items.length || quest.items.some(v => !v.durationSeconds)) return false;
+      const now = Date.now();
+      if (tokyoMinuteOfDay(now) < EVENING_START_MINUTE) return startPlayback(quest.items);
+      const previousQuest = quest;
+      quest = { ...emptyQuest(), phase: 'waiting', items: previousQuest.items, playAfter: now + EVENING_INTERVAL_MS };
+      if (!saveQuest()) { quest = previousQuest; return false; }
+      showError('');
+      renderPhase();
+      els.intervalTitle.focus({ preventScroll: true });
+      els.intervalPanel.scrollIntoView({ behavior: 'auto', block: 'start' });
+      return true;
+    }
+    function renderInterval() {
+      els.intervalRemaining.textContent = timerText(quest.playAfter);
+      els.playAfterInterval.disabled = Date.now() < quest.playAfter || isViewingLocked();
+    }
+    function playAfterInterval() {
+      if (quest.phase !== 'waiting' || Date.now() < quest.playAfter) return false;
       return startPlayback(quest.items);
+    }
+    function cancelInterval() {
+      if (quest.phase !== 'waiting' || isViewingLocked()) return;
+      const previousQuest = quest;
+      quest = emptyQuest();
+      if (!saveQuest()) { quest = previousQuest; return; }
+      renderPhase();
+      render();
+      els.startQuest.focus();
     }
     function playPreset(id) {
       const video = PRESET_VIDEOS.get(id);
@@ -1759,7 +1813,9 @@
         renderCooldown();
       }
       if (resting) return;
-      if (quest.phase === 'running') {
+      if (quest.phase === 'waiting') {
+        renderInterval();
+      } else if (quest.phase === 'running') {
         if (playerReady && player?.getPlayerState?.() === 1) {
           if (!currentVideoMatches()) loadCurrentVideo();
           else recordProgress();
@@ -2056,6 +2112,8 @@
     });
     els.startQuest.addEventListener('click', () => isSelecting() ? startQuest() : beginSelection());
     els.playSelection.addEventListener('click', startQuest);
+    els.playAfterInterval.addEventListener('click', playAfterInterval);
+    els.cancelInterval.addEventListener('click', cancelInterval);
     els.resumeQuest.addEventListener('click', resumeQuest);
     els.pauseQuest.addEventListener('click', () => { if (currentVideoMatches()) player.pauseVideo(); });
     els.seekForward.addEventListener('click', seekForward);
@@ -2116,12 +2174,15 @@
         quest = { ...emptyQuest(), phase: 'locked', lockedUntil: next.lockedUntil };
         destroyPlayer();
         renderPhase();
-      } else if (quest.phase === 'planning' && next.phase === 'running' && !next.presetMode) {
+      } else if ((quest.phase === 'planning' || quest.phase === 'waiting')
+        && (next.phase === 'waiting' || (next.phase === 'running' && !next.presetMode))) {
         quest = next;
         destroyPlayer();
         renderPhase();
-      } else if (next.phase === 'planning' && quest.phase === 'planning') {
+      } else if (next.phase === 'planning' && (quest.phase === 'planning' || quest.phase === 'waiting')) {
+        const wasWaiting = quest.phase === 'waiting';
         quest = next;
+        if (wasWaiting) renderPhase();
         render();
       }
     });
