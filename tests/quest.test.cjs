@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
+process.env.TZ = 'Asia/Tokyo';
 
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const source = html.match(/<script>([\s\S]*?)<\/script>/)[1];
@@ -13,8 +14,8 @@ const fixtures = ['aaaaaaaaaaa', 'bbbbbbbbbbb'].map((id, index) => ({
   thumbnail: 'https://i.ytimg.com/vi/' + id + '/hqdefault.jpg'
 }));
 
-function boot(saved = new Map()) {
-  let now = new Date('2026-11-09T14:59:00Z').getTime();
+function boot(saved = new Map(), startAt = '2026-11-09T10:59:00Z') {
+  let now = new Date(startAt).getTime();
   const nodes = new Map();
   function element(id) {
     if (nodes.has(id)) return nodes.get(id);
@@ -58,7 +59,8 @@ async function main() {
   await app.run('loadDurations()');
   assert.equal(app.nodes.get('totalDuration').textContent, '3分10秒');
   assert.equal(app.nodes.get('startQuest').disabled, false);
-  assert.match(app.nodes.get('finishTime').textContent, /11\/10.*00:02/);
+  assert.match(app.nodes.get('finishTime').textContent, /11\/9.*20:02/);
+  assert.match(app.run('clockTime(Date.parse("2026-11-09T15:02:00Z"))'), /11\/10.*00:02/);
   app.run('changeQueue("bbbbbbbbbbb","up")');
   assert.deepEqual(app.get('quest.items.map(v=>v.id)'), ['bbbbbbbbbbb', 'aaaaaaaaaaa']);
   app.run('resumeQuest=()=>{};startQuest();');
@@ -225,5 +227,35 @@ async function main() {
   assert.ok(app.saved.has(KEY));
   console.log('PASS: selection, duration API, seeking/resume, next button, automatic advance, duplicate ends, cooldown, expiry');
 }
+async function testNightViewing() {
+  const night = boot(new Map(), '2026-11-09T11:29:59Z');
+  assert.equal(night.run('isNightViewing()'), false);
+  night.run(`startPlayback([{...PRESET_VIDEOS.get('80mAjV1XUUc')}]);
+    playerReady=true;hasPlayed=true;
+    player={getVideoData(){return {video_id:'80mAjV1XUUc'};},getCurrentTime(){return 92;},destroy(){}};
+  `);
+  night.advance(1000);
+  night.run('tick()');
+  assert.equal(night.run('isNightViewing()'), true, '20:30 JST is blocked');
+  assert.equal(night.nodes.get('nightScreen').hidden, false);
+  assert.equal(night.nodes.get('resumeQuest').disabled, true);
+  assert.equal(night.get('player'), null);
+  assert.equal(night.get('quest.checkpoint'), 92);
+  const resumed = boot(new Map(night.saved), '2026-11-09T14:59:59Z');
+  assert.equal(resumed.nodes.get('nightScreen').hidden, false, 'Reload is still blocked at 23:59');
+  await resumed.run('resumeQuest()');
+  assert.equal(resumed.get('playerAPI'), null, 'No embedded player is started');
+  resumed.advance(1000);
+  resumed.run('tick()');
+  assert.equal(resumed.nodes.get('nightScreen').hidden, true, 'Midnight JST releases the blackout');
+  assert.equal(resumed.nodes.get('resumeQuest').disabled, false);
+  assert.equal(resumed.get('player'), null, 'Midnight does not autoplay');
+  assert.equal(resumed.get('quest.checkpoint'), 92);
+  const latePreset = boot(new Map(), '2026-11-10T11:31:00Z');
+  assert.equal(latePreset.run('playPreset("80mAjV1XUUc")'), true);
+  assert.equal(latePreset.nodes.get('nightScreen').hidden, false);
+  assert.equal(latePreset.get('playerAPI'), null, 'Choosing a preset at night cannot start audio or video');
+  console.log('PASS: daily JST cutoff, saved progress, no playback during blackout and manual resume after midnight');
+}
 module.exports = { boot, fixtures };
-if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });
+if (require.main === module) main().then(testNightViewing).catch(error => { console.error(error); process.exitCode = 1; });

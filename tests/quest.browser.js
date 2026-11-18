@@ -4,7 +4,7 @@ async page => {
   const second = 'bbbbbbbbbbb';
   const secondPreset = 'ZNWfZclu72c';
   const workVideo = '80mAjV1XUUc';
-  await page.clock.install();
+  await page.clock.install({ time: new Date('2026-11-09T10:00:00Z') });
   await page.addInitScript(({ first, second }) => {
     localStorage.setItem('fischers2017ViewerCacheV5', JSON.stringify({
       videos: [
@@ -129,6 +129,21 @@ async page => {
   check(await page.locator('#cooldown').isHidden() && await page.locator('#pauseQuest').isVisible(), 'Cooldown expires without stopping playback');
   await page.locator('#backToPresets').click();
   check(await page.locator('#catalog').isVisible() && await page.locator('#startQuest').isEnabled(), 'Ordinary selection is available again');
+  await page.clock.setSystemTime(new Date('2026-11-09T11:29:50Z'));
+  await page.locator('#presetList [data-select="' + workVideo + '"]').click();
+  await page.locator('#pauseQuest').waitFor();
+  await page.clock.runFor(12000);
+  check(await page.locator('#nightScreen').isVisible(), 'Blackout starts during playback at 20:30 JST');
+  check(await page.locator('iframe').count() === 0 && await page.locator('#resumeQuest').isDisabled(), 'Blackout stops both video and audio');
+  const nightCheckpoint = await checkpoint();
+  check(nightCheckpoint > 0, 'Blackout saves the current position');
+  await page.screenshot({ path: 'output/playwright/quest-mobile-night.png' });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  check(await page.locator('#nightScreen').isVisible(), 'Night blackout survives reload');
+  await page.clock.setSystemTime(new Date('2026-11-09T15:00:00Z'));
+  await page.clock.runFor(1000);
+  check(await page.locator('#nightScreen').isHidden() && await page.locator('#resumeQuest').isEnabled(), 'Midnight allows manual resume');
+  check(await page.locator('iframe').count() === 0 && await checkpoint() === nightCheckpoint, 'Midnight does not autoplay or reset progress');
   check(dataApiCalls === 0, 'Preset selection and playback do not call the Data API');
-  console.log('PASS browser: focus-to-rest schedule, reload, manual resume, ordinary queue cooldown');
+  console.log('PASS browser: focus and rest, queue cooldown, nightly blackout and manual resume');
 }

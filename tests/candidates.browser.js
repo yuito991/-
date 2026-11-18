@@ -23,7 +23,7 @@ async page => {
     contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270"><rect width="480" height="270" fill="#164e63"/><rect x="190" y="85" width="100" height="100" rx="8" fill="#0ea5e9"/><path d="M225 110v50l38-25z" fill="white"/></svg>'
   }));
   await page.setViewportSize({ width: 320, height: 480 });
-  await page.clock.install();
+  await page.clock.install({ time: new Date('2026-11-09T10:00:00Z') });
   await page.goto('http://127.0.0.1:8876', { waitUntil: 'domcontentloaded' });
   console.log((await page.locator('body').innerText()).slice(0, 400));
   await page.getByRole('combobox', { name: '開始年', exact: true }).selectOption('2020');
