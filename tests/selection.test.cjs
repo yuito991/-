@@ -53,6 +53,7 @@ async function main() {
   console.log('PASS: timed start, no reset from reroll/reload, no selection after expiry, wait for duration then play');
 
   const evening = setup('2026-11-09T10:00:00Z');
+  evening.run('for (let i=0;i<500;i++) tapRestUnlock()');
   evening.run('beginSelection();selectVideo("aaaaaaaaaaa");els.apiKey.value="test-key";');
   await evening.run('loadDurations()');
   assert.equal(evening.run('startQuest()'), true, '19:00 JST starts the interval');
@@ -79,6 +80,7 @@ async function main() {
   assert.deepEqual(waitingReload.get('quest.items.map(v=>v.id)'), ['aaaaaaaaaaa']);
 
   const afterSelection = setup('2026-11-09T11:29:45Z');
+  afterSelection.run('for (let i=0;i<500;i++) tapRestUnlock()');
   afterSelection.run('beginSelection();selectVideo("aaaaaaaaaaa");els.apiKey.value="test-key";');
   await afterSelection.run('loadDurations()');
   afterSelection.advance(10000);

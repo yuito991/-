@@ -159,7 +159,18 @@ async page => {
   check(await page.locator('#restTapCount').innerText() === '499 / 500', 'Reload keeps the tap count');
   await page.locator('#restTapButton').click();
   check(await page.locator('#restTapPanel').isHidden() && await page.locator('#startQuest').isEnabled(), 'The 500th tap unlocks normal selection');
+  await page.clock.setSystemTime(new Date('2026-11-11T02:59:58Z'));
+  await page.clock.runFor(1000);
+  check(await page.locator('#restTapPanel').isVisible(), 'Before noon, an unfinished lock still applies');
+  await page.clock.setSystemTime(new Date('2026-11-11T03:00:00Z'));
+  await page.clock.runFor(1000);
+  check(await page.locator('#restTapPanel').isHidden() && await page.locator('#startQuest').isEnabled(), 'Noon releases the lock without taps');
   await page.clock.setSystemTime(new Date('2026-11-11T10:00:00Z'));
+  await page.clock.runFor(1000);
+  check(await page.locator('#restTapCount').innerText() === '0 / 500' && await page.locator('#planning').isHidden(), '19:00 creates a new lock');
+  await page.locator('#restTapButton').evaluate(button => {
+    for (let i = 0; i < 500; i++) button.click();
+  });
   await page.locator('#startQuest').click();
   await page.locator('#grid .thumb-btn[data-select="' + first + '"]').click();
   await page.locator('#playSelection').click();
@@ -180,5 +191,5 @@ async page => {
   await page.locator('#pauseQuest').waitFor();
   check(await page.locator('#intervalPanel').isHidden(), 'Manual play after the interval');
   check(dataApiCalls === 0, 'Preset selection and playback do not call the Data API');
-  console.log('PASS browser: evening tap gates, preset exemption, reload and evening interval');
+  console.log('PASS browser: noon auto-unlock, 19:00 re-lock, presets and evening interval');
 }

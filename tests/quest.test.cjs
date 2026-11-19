@@ -232,6 +232,7 @@ async function main() {
 }
 async function testDailyRest() {
   const daily = boot(new Map(), '2026-11-09T11:29:59Z');
+  daily.run('for(let i=0;i<500;i++) tapRestUnlock()');
   assert.equal(daily.run('isViewingLocked()'), false);
   daily.run(`startPlayback([{...PRESET_VIDEOS.get('80mAjV1XUUc')}]);
     playerReady=true;hasPlayed=true;
@@ -295,7 +296,11 @@ async function testDailyRest() {
   assert.equal(shortFocusRest.nodes.get('restRemaining').textContent, '03:00', 'Daily rest outlasts a shorter focus rest');
   const longFocusRest = boot(schedule('2026-11-09T11:37:00Z'), '2026-11-09T11:35:00Z');
   assert.equal(longFocusRest.nodes.get('restRemaining').textContent, '02:00', 'Longer focus rest still applies after the daily window');
-  const overnightFocusRest = boot(schedule('2026-11-09T15:01:00Z'), '2026-11-09T15:00:00Z');
+  const overnightSaved = schedule('2026-11-09T15:01:00Z');
+  overnightSaved.set('fischersRestUnlockV1', JSON.stringify({
+    version: 2, unlockedThrough: Date.parse('2026-11-09T11:35:00Z'), pendingUntil: 0, taps: 0
+  }));
+  const overnightFocusRest = boot(overnightSaved, '2026-11-09T15:00:00Z');
   assert.equal(overnightFocusRest.nodes.get('restRemaining').textContent, '01:00', 'Midnight does not shorten rest still in progress');
   overnightFocusRest.advance(60000);
   overnightFocusRest.run('tick()');
@@ -306,5 +311,39 @@ async function testDailyRest() {
   assert.equal(eveningFocusRest.nodes.get('restTapCount').textContent, '0 / 500', 'Focus rest ending at 19:00 creates a challenge');
   console.log('PASS: evening rest only, exactly 500 taps, saved progress and preset exemption');
 }
+function testDailyTapWindow() {
+  const evening = boot(new Map(), '2026-11-09T09:59:59Z');
+  assert.equal(evening.nodes.get('restTapPanel').hidden, true);
+  evening.run(`resumeQuest=()=>{};startPlayback([{...PRESET_VIDEOS.get('80mAjV1XUUc')}]);
+    playerReady=true;hasPlayed=true;
+    player={getVideoData(){return {video_id:'80mAjV1XUUc'};},getCurrentTime(){return 45;},destroy(){}};
+  `);
+  evening.advance(1000);
+  evening.run('tick()');
+  assert.equal(evening.nodes.get('restTapCount').textContent, '0 / 500', '19:00 locks without a rest having started');
+  assert.equal(evening.get('player'), null);
+  assert.equal(evening.get('quest.checkpoint'), 45);
+
+  const morning = boot(new Map(evening.saved), '2026-11-10T02:59:59Z');
+  morning.run('tapRestUnlock()');
+  assert.equal(morning.nodes.get('restTapCount').textContent, '1 / 500');
+  morning.advance(1000);
+  morning.run('tick()');
+  assert.equal(morning.nodes.get('restTapPanel').hidden, true, '12:00 JST unlocks without all 500 taps');
+  assert.equal(morning.get('restUnlock.taps'), 0);
+  assert.equal(morning.get('player'), null, 'No autoplay at noon');
+  assert.equal(morning.get('quest.checkpoint'), 45);
+  morning.advance(7 * 3600000);
+  morning.run('tick()');
+  assert.equal(morning.nodes.get('restTapPanel').hidden, false, '19:00 JST starts a new lock');
+  assert.equal(morning.nodes.get('restTapCount').textContent, '0 / 500');
+
+  const longRest = boot(new Map([['fischersFocusScheduleV1', JSON.stringify({
+    focusAt: Date.parse('2026-11-10T02:58:00Z'), restAt: Date.parse('2026-11-10T03:01:00Z')
+  })]]), '2026-11-10T03:00:00Z');
+  assert.equal(longRest.nodes.get('restRemaining').textContent, '01:00', 'Noon does not cancel an ongoing rest');
+  assert.equal(longRest.nodes.get('restTapPanel').hidden, true);
+  console.log('PASS: daily 19:00 lock, automatic noon release, next evening re-lock and independent rest timers');
+}
 module.exports = { boot, fixtures };
-if (require.main === module) main().then(testDailyRest).catch(error => { console.error(error); process.exitCode = 1; });
+if (require.main === module) main().then(testDailyRest).then(testDailyTapWindow).catch(error => { console.error(error); process.exitCode = 1; });

@@ -896,6 +896,7 @@
       <h2 id="restTapTitle">選択動画のロック中</h2>
       <p class="cooldown-time" id="restTapCount"></p>
       <button class="button accent rest-unlock" id="restTapButton" type="button" aria-describedby="restTapCount">タップして解除</button>
+      <small>日本時間12:00に自動解除</small>
     </section>
     <section class="quest-summary" id="planning" aria-labelledby="questHeading">
       <h2 class="quest-heading" id="questHeading">今回の動画</h2>
@@ -1018,6 +1019,7 @@
     const COOLDOWN_MS = 30 * 60 * 1000;
     const SELECTION_MS = 10 * 1000;
     const EVENING_START_MINUTE = 19 * 60;
+    const TAP_LOCK_RELEASE_MINUTE = 12 * 60;
     const EVENING_INTERVAL_MS = 5 * 60 * 1000;
     const TOKYO_CLOCK = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
     const DAILY_REST_START_MINUTE = 20 * 60 + 30;
@@ -1365,11 +1367,22 @@
     function isRestDue() {
       return restDeadline(Date.now()) > 0;
     }
+    function tapWindowStart(now) {
+      const minute = tokyoMinuteOfDay(now);
+      const midnight = Math.floor(now / 60000) * 60000 - minute * 60000;
+      if (minute >= EVENING_START_MINUTE) return midnight + EVENING_START_MINUTE * 60000;
+      if (minute < TAP_LOCK_RELEASE_MINUTE) return midnight - (24 * 60 - EVENING_START_MINUTE) * 60000;
+      return 0;
+    }
     function tapUnlockDeadline(now) {
+      const windowStart = tapWindowStart(now);
+      if (!windowStart) return 0;
+      const dailyEnd = windowStart + (DAILY_REST_END_MINUTE - EVENING_START_MINUTE) * 60000;
+      const daily = now >= dailyEnd - (DAILY_REST_END_MINUTE - DAILY_REST_START_MINUTE) * 60000 ? dailyEnd : 0;
       const focusRest = focusSchedule && now >= focusSchedule.focusAt
         && tokyoMinuteOfDay(focusSchedule.restAt) >= EVENING_START_MINUTE ? focusSchedule.restAt : 0;
       const interval = quest.phase === 'waiting' && now >= quest.playAfter ? quest.playAfter : 0;
-      return Math.max(dailyUnlockDeadline(now), focusRest, interval, restUnlock.pendingUntil);
+      return Math.max(windowStart, daily, focusRest, interval, restUnlock.pendingUntil);
     }
     function isQueueTapLocked() {
       const now = Date.now();
@@ -1447,6 +1460,8 @@
       const unlockDeadline = tapUnlockDeadline(now);
       if (unlockDeadline > Math.max(restUnlock.unlockedThrough, restUnlock.pendingUntil)) {
         saveRestUnlock({ ...restUnlock, pendingUntil: unlockDeadline, taps: 0 });
+      } else if (!unlockDeadline && restUnlock.pendingUntil && restUnlock.pendingUntil <= now) {
+        saveRestUnlock({ ...restUnlock, pendingUntil: 0, taps: 0 });
       }
       const deadline = restDeadline(now);
       if (deadline && !restApplied) {
