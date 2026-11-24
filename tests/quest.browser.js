@@ -4,6 +4,8 @@ async page => {
   const second = 'bbbbbbbbbbb';
   const secondPreset = 'ZNWfZclu72c';
   const workVideo = '80mAjV1XUUc';
+  const milestoneLive = 'AV7LET05IsU';
+  const movingLive = 'GufBjf0AvuU';
   await page.clock.install({ time: new Date('2026-11-09T09:00:00Z') });
   await page.addInitScript(({ first, second }) => {
     localStorage.setItem('fischers2017ViewerCacheV5', JSON.stringify({
@@ -32,16 +34,22 @@ async page => {
         getCurrentTime(){return this.state===1?Math.min(this.getDuration(),(Date.now()-this.start)/1000):this.pos;}
         pauseVideo(){this.pos=this.getCurrentTime();this.state=2;clearTimeout(this.timer);this.events.onStateChange({data:2});}
         getPlayerState(){return this.state;}
-        getDuration(){return {'${first}':583,'${second}':779,'${secondPreset}':779,'${workVideo}':5403}[this.id];}
+        getDuration(){return {'${first}':583,'${second}':779,'${secondPreset}':779,'${workVideo}':5403,'${milestoneLive}':9990,'${movingLive}':7693}[this.id];}
         seekTo(value){this.pos=value;if(this.state===1)this.playVideo();}
         destroy(){clearTimeout(this.timer);this.frame.remove();}
       }};window.onYouTubeIframeAPIReady();`
   }));
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('http://127.0.0.1:8876', { waitUntil: 'domcontentloaded' });
-  check(await page.locator('#presetList button:visible').count() === 4, 'Four presets shown before selection');
+  check(await page.locator('#presetList button:visible').count() === 6, 'Six presets shown before selection');
   check(await page.locator('#selectionDock').isHidden(), 'No timer until selection starts');
   await page.screenshot({ path: 'output/playwright/quest-mobile-presets.png' });
+  for (const [id, duration] of [[milestoneLive, '2時間46分30秒'], [movingLive, '2時間8分13秒']]) {
+    await page.locator('#presetList [data-select="' + id + '"]').click();
+    await page.locator('#pauseQuest').waitFor();
+    check(await page.locator('#playerMeta').innerText() === duration, 'Live archive plays as a preset with its recorded duration');
+    await page.locator('#backToPresets').click();
+  }
   await page.getByRole('button', { name: '選択スタート', exact: true }).click();
   check(await page.locator('#presetPanel').isHidden(), 'Presets are hidden during normal selection');
   await page.locator('#grid .thumb-btn[data-select="' + first + '"]').click();
@@ -74,7 +82,7 @@ async page => {
   check(await page.locator('#cooldown').isVisible(), 'Finish button locks immediately during the last video');
   check(await page.locator('iframe').count() === 0, 'No hidden player');
   check(await page.locator('#planning').isHidden() && await page.locator('#catalog').isHidden(), 'Normal viewing stays locked');
-  check(await page.locator('#presetList button:visible').count() === 4, 'Locked screen still offers the presets');
+  check(await page.locator('#presetList button:visible').count() === 6, 'Locked screen still offers the presets');
   const lockUntil = () => page.evaluate(() => localStorage.getItem('fischersQuestLockUntilV1'));
   const originalLock = await lockUntil();
   await page.screenshot({ path: 'output/playwright/quest-mobile-locked.png' });
@@ -89,7 +97,7 @@ async page => {
   check(await page.locator('#pauseQuest').isVisible(), 'Preset starts playing');
   check(await page.locator('#selectionDock').isHidden(), 'Direct playback skips the selection timer');
   check(await page.evaluate(() => window.testPlayerVars.controls === 1 && window.testPlayerVars.disablekb === 0), 'Direct presets use normal YouTube seeking');
-  check(await page.locator('#watchPresetList button:visible').count() === 4, 'Preset choices remain available while playing');
+  check(await page.locator('#watchPresetList button:visible').count() === 6, 'Preset choices remain available while playing');
   check(await page.locator('#watchPresetList [data-select="' + workVideo + '"]').isDisabled(), 'Current preset is marked');
   await page.locator('#presetTimerMinutes').fill('1');
   await page.locator('#presetRestMinutes').fill('1');

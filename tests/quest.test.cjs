@@ -162,6 +162,13 @@ async function main() {
   assert.equal(direct.nodes.get('presetPanel').hidden, false);
   assert.equal(direct.nodes.get('candidatePanel').hidden, true);
   assert.equal(direct.nodes.get('startQuest').disabled, true, 'No regular selection without an archive');
+  const archives = boot();
+  archives.run('resumeQuest=()=>{}');
+  for (const [id, duration] of [['AV7LET05IsU', 9990], ['GufBjf0AvuU', 7693]]) {
+    assert.equal(archives.run('playPreset(' + JSON.stringify(id) + ')'), true);
+    assert.deepEqual(archives.get('quest.items.map(v=>[v.id,v.durationSeconds])'), [[id, duration]]);
+    assert.equal(archives.get('quest.presetMode'), true);
+  }
   assert.equal(direct.run('resumeQuest=()=>{};playPreset("80mAjV1XUUc")'), true);
   assert.deepEqual(direct.get('quest.items.map(v=>[v.id,v.durationSeconds])'), [['80mAjV1XUUc', 5403]]);
   assert.equal(direct.get('quest.selectionUntil'), 0);
